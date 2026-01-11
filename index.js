@@ -10,22 +10,30 @@ const config = {
 };
 
 const client = new line.Client(config);
+app.post('/webhook', line.middleware(config), async (req, res) => {
+  try {
+    const events = req.body.events || [];
 
-app.post('/webhook', line.middleware(config), (req, res) => {
-  res.sendStatus(200);
-
-  req.body.events.forEach(event => {
-    if (event.type === 'message' && event.message.type === 'text') {
-      client.replyMessage(event.replyToken, {
-        type: 'text',
-        text: '✅ Bot 已成功連線（Render）'
-      });
+    for (const event of events) {
+      // 只處理「可回覆的文字訊息」
+      if (
+        event.type === 'message' &&
+        event.message.type === 'text' &&
+        event.replyToken
+      ) {
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '✅ Bot 已成功連線（Render）'
+        });
+      }
     }
-  });
+
+    // ⚠️ 一定最後才回 200
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('Webhook error:', err);
+    res.sendStatus(200); // 就算錯，也回 200 給 LINE
+  }
 });
 
-// ⭐ Render 需要用 process.env.PORT
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+
