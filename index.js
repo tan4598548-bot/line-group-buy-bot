@@ -10,12 +10,12 @@ const config = {
 };
 
 const client = new line.Client(config);
+
 app.post('/webhook', line.middleware(config), async (req, res) => {
   try {
     const events = req.body.events || [];
 
     for (const event of events) {
-      // 只處理「可回覆的文字訊息」
       if (
         event.type === 'message' &&
         event.message.type === 'text' &&
@@ -28,12 +28,15 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       }
     }
 
-    // ⚠️ 一定最後才回 200
     res.sendStatus(200);
   } catch (err) {
     console.error('Webhook error:', err);
-    res.sendStatus(200); // 就算錯，也回 200 給 LINE
+    res.sendStatus(200);
   }
 });
 
-
+// ⭐⭐⭐ 這段一定要有 ⭐⭐⭐
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
