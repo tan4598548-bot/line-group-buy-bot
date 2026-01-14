@@ -1,52 +1,93 @@
+/**
+ * orderService.js
+ * 唯一訂單資料來源（orders.json）
+ * - 群友下單（多色拆單）
+ * - 團主修改 / 刪除
+ */
+
 const fs = require('fs');
 const path = require('path');
 
 const ordersPath = path.join(__dirname, '../data/orders.json');
 
+/* ------------------ 基礎讀寫 ------------------ */
+
 function readOrders() {
-  if (!fs.existsSync(ordersPath)) return {};
-  return JSON.parse(fs.readFileSync(ordersPath));
+  if (!fs.existsSync(ordersPath)) return [];
+  return JSON.parse(fs.readFileSync(ordersPath, 'utf8'));
 }
 
 function saveOrders(data) {
-  fs.writeFileSync(ordersPath, JSON.stringify(data, null, 2));
+  fs.writeFileSync(ordersPath, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// 新增訂單（支援多色拆單）
-module.exports.addOrder = (userId, order) => {
+/* ------------------ 新增訂單 ------------------ */
+/**
+ * order = {
+ *   userId,
+ *   userName,
+ *   productCode,
+ *   productName,
+ *   colors: ['BK','WH'],
+ *   size,
+ *   quantity
+ * }
+ */
+function addOrder(order) {
   const orders = readOrders();
+  const time = new Date().toISOString();
 
-  if (!orders[userId]) {
-    orders[userId] = [];
-  }
-
-  for (const color of order.colors) {
-    orders[userId].push({
-      product: order.productCode,
-      qty: order.qty,
+  // 多色拆單
+  order.colors.forEach(color => {
+    orders.push({
+      userId: order.userId,
+      userName: order.userName,
+      productCode: order.productCode,
+      productName: order.productName,
       color,
-      size: order.size
+      size: order.size || '',
+      quantity: order.quantity,
+      time
     });
-  }
+  });
 
   saveOrders(orders);
-};
+}
 
-// 團主用：修改 / 刪除
-module.exports.updateOrder = (userId, index, newOrder) => {
+/* ------------------ 團主管理 ------------------ */
+
+// 取得所有訂單（for export / summary）
+function getAllOrders() {
+  return readOrders();
+}
+
+// 修改某一筆（團主用 index）
+function updateOrder(index, newOrder) {
   const orders = readOrders();
-  if (!orders[userId] || !orders[userId][index]) return false;
+  if (!orders[index]) return false;
 
-  orders[userId][index] = newOrder;
+  orders[index] = {
+    ...orders[index],
+    ...newOrder
+  };
+
   saveOrders(orders);
   return true;
-};
+}
 
-module.exports.deleteOrder = (userId, index) => {
+// 刪除某一筆（團主用 index）
+function deleteOrder(index) {
   const orders = readOrders();
-  if (!orders[userId] || !orders[userId][index]) return false;
+  if (!orders[index]) return false;
 
-  orders[userId].splice(index, 1);
+  orders.splice(index, 1);
   saveOrders(orders);
   return true;
+}
+
+module.exports = {
+  addOrder,
+  getAllOrders,
+  updateOrder,
+  deleteOrder
 };

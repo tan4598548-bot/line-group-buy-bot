@@ -1,60 +1,79 @@
-const cron = require('node-cron');
-const products = require('../config/products');
+/**
+ * reminderService.js
+ * 功能：
+ * - 截止前一天自動提醒（只提醒一次）
+ */
+
 const fs = require('fs');
 const path = require('path');
+const cron = require('node-cron');
 
-// 紀錄「已提醒過哪些商品」
-const recordPath = path.join(__dirname, '../data/reminded.json');
+const remindedPath = path.join(__dirname, 'reminded.json');
 
-function readReminded() {
-  if (!fs.existsSync(recordPath)) return {};
-  return JSON.parse(fs.readFileSync(recordPath));
+// 預設截止日（可之後做成指令）
+const DEADLINE = process.env.ORDER_DEADLINE; 
+// 格式：2026-02-28
+
+// 提醒時間（每天 10:00）
+const CRON_TIME = '0 10 * * *'; 
+
+function hasReminded(dateStr) {
+  if (!fs.existsSync(remindedPath)) return false;
+  const data = JSON.parse(fs.readFileSync(remindedPath, 'utf8'));
+  return data[dateStr] === true;
 }
 
-function saveReminded(data) {
-  fs.writeFileSync(recordPath, JSON.stringify(data, null, 2));
+function markReminded(dateStr) {
+  let data = {};
+  if (fs.existsSync(remindedPath)) {
+    data = JSON.parse(fs.readFileSync(remindedPath, 'utf8'));
+  }
+  data[dateStr] = true;
+  fs.writeFileSync(remindedPath, JSON.stringify(data, null, 2));
 }
 
-function isTomorrow(dateStr) {
-  const today = new Date();
-  const target = new Date(dateStr);
+function isOneDayBeforeDeadline(todayStr, deadlineStr) {
+  const today = new Date(todayStr);
+  const deadline = new Date(deadlineStr);
 
-  today.setHours(0, 0, 0, 0);
-  target.setHours(0, 0, 0, 0);
+  const diffDays =
+    Math.floor((deadline - today) / (1000 * 60 * 60 * 24));
 
-  const diff = (target - today) / (1000 * 60 * 60 * 24);
-  return diff === 1;
+  return diffDays === 1;
 }
 
-module.exports.startDeadlineReminder = (client, groupId) => {
-  // 每天早上 9 點檢查
-  cron.schedule('0 9 * * *', async () => {
-    const reminded = readReminded();
+/**
+ * 啟動截止提醒
+ * @param {Function} sendMessageToGroup
+ */
+function startDeadlineReminder(sendMessageToGroup) {
+  if (!DEADLINE) {
+    console.warn('⚠️ 未設定 ORDER_DEADLINE，截止提醒未啟動');
+    return;
+  }
 
-    for (const code in products) {
-      const product = products[code];
+  cron.schedule(CRON_TIME, async () => {
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
 
-      if (!product.deadline) continue;
-      if (!isTomorrow(product.deadline)) continue;
-      if (reminded[code]) continue; // 已提醒過
+      if (!isOneDayBeforeDeadline(todayStr, DEADLINE)) return;
+      if (hasReminded(DEADLINE)) return;
 
-      const message = `⚠️【截止提醒】
-商品：${product.name}（${code}）
-⏰ 明天（${product.deadline}）截止下單
-要買的請把握時間！`;
+      await sendMessageToGroup(
+        `⏰ 團購截止提醒\n\n` +
+        `⚠️ 明天（${DEADLINE}）為最後下單日\n` +
+        `請尚未下單的群友把握時間！`
+      );
 
-      try {
-        await client.pushMessage(groupId, {
-          type: 'text',
-          text: message
-        });
+      markReminded(DEADLINE);
+      console.log('✅ 已發送截止前一天提醒');
 
-        reminded[code] = true;
-        saveReminded(reminded);
-        console.log(`✅ 已發送截止提醒：${code}`);
-      } catch (err) {
-        console.error('提醒發送失敗', err);
-      }
+    } catch (err) {
+      console.error('Reminder error:', err);
     }
   });
+}
+
+module.exports = {
+  startDeadlineReminder
 };

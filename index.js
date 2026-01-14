@@ -6,6 +6,7 @@ const { parseOrderText } = require('./utils/parser');
 const { validateOrder } = require('./utils/validator');
 const orderService = require('./services/orderService');
 const sheetService = require('./services/sheetService');
+const { startDeadlineReminder } = require('./services/reminderService');
 
 const app = express();
 
@@ -16,6 +17,24 @@ const config = {
 };
 
 const client = new line.Client(config);
+
+/* ---------- 群組推播工具 ---------- */
+const GROUP_ID = process.env.LINE_GROUP_ID;
+
+async function sendMessageToGroup(text) {
+  if (!GROUP_ID) {
+    console.warn('⚠️ 未設定 LINE_GROUP_ID，無法推播群組');
+    return;
+  }
+
+  await client.pushMessage(GROUP_ID, {
+    type: 'text',
+    text
+  });
+}
+
+/* ---------- 啟動截止提醒 ---------- */
+startDeadlineReminder(sendMessageToGroup);
 
 /* ---------- Webhook ---------- */
 app.post('/webhook', line.middleware(config), async (req, res) => {
@@ -33,51 +52,39 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
       /* ====== 團主指令：/export ====== */
       if (userText === '/export') {
-        try {
-          const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',');
-          if (!ADMIN_IDS.includes(event.source.userId)) {
-            await client.replyMessage(event.replyToken, {
-              type: 'text',
-              text: '❌ 此指令僅限團主使用'
-            });
-            continue;
-          }
-
-          const orders = orderService.getAllOrders();
-          if (!orders || orders.length === 0) {
-            await client.replyMessage(event.replyToken, {
-              type: 'text',
-              text: '⚠️ 目前沒有任何訂單'
-            });
-            continue;
-          }
-
-          await sheetService.rebuildSummary(orders);
-
+        const ADMIN_IDS = (process.env.ADMIN_IDS || '').split(',');
+        if (!ADMIN_IDS.includes(event.source.userId)) {
           await client.replyMessage(event.replyToken, {
             type: 'text',
-            text: '📊 發貨總表已更新完成'
-          });
-
-          continue;
-        } catch (err) {
-          console.error('Export error:', err);
-          await client.replyMessage(event.replyToken, {
-            type: 'text',
-            text: '❌ 匯出失敗，請查看系統紀錄'
+            text: '❌ 此指令僅限團主使用'
           });
           continue;
         }
+
+        const orders = orderService.getAllOrders();
+        if (!orders.length) {
+          await client.replyMessage(event.replyToken, {
+            type: 'text',
+            text: '⚠️ 目前沒有任何訂單'
+          });
+          continue;
+        }
+
+        await sheetService.rebuildSummary(orders);
+
+        await client.replyMessage(event.replyToken, {
+          type: 'text',
+          text: '📊 發貨總表已更新完成'
+        });
+        continue;
       }
 
-      /* ====== 群友下單（+ 開頭） ====== */
+      /* ====== 群友下單 ====== */
       if (!userText.startsWith('+')) continue;
 
-      // 1️⃣ 解析
       const parsed = parseOrderText(userText);
-
-      // 2️⃣ 驗證
       const result = validateOrder(parsed);
+
       if (!result.ok) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
@@ -86,7 +93,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // 3️⃣ 建立訂單
       const order = {
         userId: event.source.userId,
         userName: '群友',
@@ -97,10 +103,8 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         quantity: result.data.quantity
       };
 
-      // 4️⃣ 寫入 orders.json
       orderService.addOrder(order);
 
-      // 5️⃣ 回覆成功
       await client.replyMessage(event.replyToken, {
         type: 'text',
         text:
