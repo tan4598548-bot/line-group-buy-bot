@@ -1,0 +1,11 @@
+# Node
+node_modules/
+
+# Env
+.env
+
+# Google Service Account
+google-service-account.json
+
+# Local / private
+Final/
