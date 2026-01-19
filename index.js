@@ -14,6 +14,9 @@ const reminderService = require('./services/reminderService');
 const sheetService = require('./services/sheetService');
 const outOfStockService = require('./services/outOfStockService');
 
+// roles
+const roles = require('./config/roles');
+
 const app = express();
 
 /**
@@ -27,6 +30,13 @@ const config = {
 const client = process.env.LINE_CHANNEL_ACCESS_TOKEN
   ? new line.Client(config)
   : null;
+
+/**
+ * 是否團主
+ */
+function isAdmin(userId) {
+  return roles.admins.includes(userId);
+}
 
 /**
  * Webhook
@@ -43,61 +53,71 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       const replyToken = event.replyToken;
 
       /* ======================
-       * 團主管理指令
+       * 團主管理指令（需權限）
        * ====================== */
 
-      if (text === '/list') {
-        const orders = orderService.listOrders();
-        if (orders.length === 0) {
-          await safeReply(replyToken, '📭 目前沒有任何訂單');
-        } else {
-          const msg = orders
-            .map(
-              o =>
-                `#${o.index} ${o.productCode} ${o.color} ${o.size} x${o.quantity}（${o.userName}）`
-            )
-            .join('\n');
-          await safeReply(replyToken, msg);
+      if (text.startsWith('/')) {
+        if (!isAdmin(userId)) {
+          await safeReply(replyToken, '⛔ 此指令僅限團主使用');
+          continue;
         }
-        continue;
-      }
 
-      if (text.startsWith('/delete ')) {
-        const index = Number(text.split(' ')[1]);
-        const ok = orderService.deleteOrder(index);
-        await safeReply(
-          replyToken,
-          ok ? '🗑️ 訂單已刪除' : '❌ 訂單不存在'
-        );
-        continue;
-      }
-
-      if (text.startsWith('/out ')) {
-        const code = text.split(' ')[1];
-        const result = outOfStockService.handleOutOfStock(code);
-
-        await safeReply(
-          replyToken,
-          `🚫 商品 ${code} 已斷貨\n已取消 ${result.removed} 筆訂單`
-        );
-
-        for (const uid of result.affectedUsers) {
-          try {
-            await client.pushMessage(uid, {
-              type: 'text',
-              text: `⚠️ 商品 ${code} 已斷貨，您的訂單已自動取消`
-            });
-          } catch (e) {
-            console.error('Push failed:', uid);
+        if (text === '/list') {
+          const orders = orderService.listOrders();
+          if (orders.length === 0) {
+            await safeReply(replyToken, '📭 目前沒有任何訂單');
+          } else {
+            const msg = orders
+              .map(
+                o =>
+                  `#${o.index} ${o.productCode} ${o.color} ${o.size} x${o.quantity}（${o.userName}）`
+              )
+              .join('\n');
+            await safeReply(replyToken, msg);
           }
+          continue;
         }
-        continue;
-      }
 
-      if (text === '/export') {
-        const orders = orderService.getAllOrders();
-        await sheetService.rebuildSummary(orders);
-        await safeReply(replyToken, '📦 發貨總表已重新產生完成');
+        if (text.startsWith('/delete ')) {
+          const index = Number(text.split(' ')[1]);
+          const ok = orderService.deleteOrder(index);
+          await safeReply(
+            replyToken,
+            ok ? '🗑️ 訂單已刪除' : '❌ 訂單不存在'
+          );
+          continue;
+        }
+
+        if (text.startsWith('/out ')) {
+          const code = text.split(' ')[1];
+          const result = outOfStockService.handleOutOfStock(code);
+
+          await safeReply(
+            replyToken,
+            `🚫 商品 ${code} 已斷貨\n已取消 ${result.removed} 筆訂單`
+          );
+
+          for (const uid of result.affectedUsers) {
+            try {
+              await client.pushMessage(uid, {
+                type: 'text',
+                text: `⚠️ 商品 ${code} 已斷貨，您的訂單已自動取消`
+              });
+            } catch (e) {
+              console.error('Push failed:', uid);
+            }
+          }
+          continue;
+        }
+
+        if (text === '/export') {
+          const orders = orderService.getAllOrders();
+          await sheetService.rebuildSummary(orders);
+          await safeReply(replyToken, '📦 發貨總表已重新產生完成');
+          continue;
+        }
+
+        await safeReply(replyToken, '❓ 未知的管理指令');
         continue;
       }
 
@@ -118,7 +138,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // ⭐ 抓 LINE 顯示名稱
+      // 抓 LINE 顯示名稱
       let userName = '未知';
       try {
         const profile = await client.getProfile(userId);
