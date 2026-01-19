@@ -1,37 +1,73 @@
-const cron = require('node-cron');
-const lockService = require('./lockService');
+/**
+ * reminderService.js
+ * 功能：截止前一天提醒（每天由 cron 呼叫）
+ */
+
+const fs = require('fs');
+const path = require('path');
+const products = require('../config/products');
+
+const remindedPath = path.join(__dirname, 'reminded.json');
+
+function readReminded() {
+  if (!fs.existsSync(remindedPath)) return {};
+  return JSON.parse(fs.readFileSync(remindedPath));
+}
+
+function saveReminded(data) {
+  fs.writeFileSync(remindedPath, JSON.stringify(data, null, 2));
+}
+
+function isTomorrow(dateStr) {
+  const today = new Date();
+  const target = new Date(dateStr);
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  return (
+    target.getFullYear() === tomorrow.getFullYear() &&
+    target.getMonth() === tomorrow.getMonth() &&
+    target.getDate() === tomorrow.getDate()
+  );
+}
 
 /**
- * 環境變數：
- * ORDER_DEADLINE=2026-01-31 23:59
+ * 🔔 主入口：檢查所有商品截止日
  */
-function startDeadlineReminder(sendGroup) {
-  const deadline = process.env.ORDER_DEADLINE;
-  if (!deadline) {
-    console.warn('⚠️ 未設定 ORDER_DEADLINE');
-    return;
-  }
+function checkDeadlines() {
+  console.log('🔍 [Reminder] Checking deadlines...');
 
-  const deadlineTime = new Date(deadline);
+  const reminded = readReminded();
+  let changed = false;
 
-  // 每分鐘檢查一次
-  cron.schedule('* * * * *', async () => {
-    const now = new Date();
+  Object.values(products).forEach(product => {
+    if (!product.deadline) return;
 
-    if (now >= deadlineTime && !lockService.isLocked()) {
-      lockService.lock();
+    if (isTomorrow(product.deadline)) {
+      if (reminded[product.code]) {
+        return; // 已提醒過
+      }
 
-      await sendGroup(
-        `🔒 團購已截止\n\n` +
-        `目前時間已超過截止時間\n` +
-        `❌ 系統已鎖單，無法再下單`
+      console.log(
+        `📣 [REMIND] 商品「${product.name}」將於 ${product.deadline} 截止`
       );
 
-      console.log('🔒 Order locked');
+      // 標記已提醒
+      reminded[product.code] = {
+        remindedAt: new Date().toISOString(),
+      };
+      changed = true;
     }
   });
+
+  if (changed) {
+    saveReminded(reminded);
+  }
+
+  console.log('✅ [Reminder] Check finished');
 }
 
 module.exports = {
-  startDeadlineReminder
+  checkDeadlines,
 };

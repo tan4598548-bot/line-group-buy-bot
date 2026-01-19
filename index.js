@@ -1,6 +1,6 @@
 /**
  * index.js
- * LINE 團購 Bot 主程式（Render 專用穩定版）
+ * LINE 團購 Bot 主程式（含截止提醒 cron）
  */
 
 require('dotenv').config();
@@ -8,15 +8,11 @@ const express = require('express');
 const line = require('@line/bot-sdk');
 const cron = require('node-cron');
 
-// =====================
-// 基本啟動確認（超重要）
-// =====================
+const reminderService = require('./services/reminderService');
+
 console.log('🚀 index.js loaded');
 console.log('⏱ Server boot time:', new Date().toISOString());
 
-// =====================
-// Express & LINE 設定
-// =====================
 const app = express();
 
 const config = {
@@ -26,9 +22,7 @@ const config = {
 
 const client = new line.Client(config);
 
-// =====================
-// Webhook（LINE 驗證用）
-// =====================
+// LINE webhook（保持穩定）
 app.post('/webhook', line.middleware(config), async (req, res) => {
   try {
     const events = req.body.events || [];
@@ -41,7 +35,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
       ) {
         await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: '✅ Bot 已成功連線（含 cron）',
+          text: '✅ Bot 已運行（含截止提醒）',
         });
       }
     }
@@ -56,16 +50,13 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 // =====================
 // 🔔 截止提醒 cron（每天 09:00）
 // =====================
-console.log('🕒 Registering cron job...');
+console.log('🕒 Registering deadline reminder cron...');
 
 cron.schedule(
-  '0 9 * * *', // 每天 09:00
+  '0 9 * * *',
   () => {
-    console.log('⏰ [CRON] Checking order deadlines...');
-    console.log('📅 Cron run time:', new Date().toISOString());
-
-    // 之後會在這裡接：
-    // reminderService.checkDeadlines()
+    console.log('⏰ [CRON] Deadline reminder triggered');
+    reminderService.checkDeadlines();
   },
   {
     timezone: 'Asia/Taipei',
@@ -74,8 +65,6 @@ cron.schedule(
 
 console.log('✅ Deadline reminder cron scheduled');
 
-// =====================
-// Render 啟動監聽（一定要最後）
 // =====================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
