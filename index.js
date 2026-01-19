@@ -46,7 +46,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
        * 團主管理指令
        * ====================== */
 
-      // 列出所有訂單
       if (text === '/list') {
         const orders = orderService.listOrders();
         if (orders.length === 0) {
@@ -55,7 +54,7 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           const msg = orders
             .map(
               o =>
-                `#${o.index} ${o.productCode} ${o.color} ${o.size} x${o.quantity} (${o.userName})`
+                `#${o.index} ${o.productCode} ${o.color} ${o.size} x${o.quantity}（${o.userName}）`
             )
             .join('\n');
           await safeReply(replyToken, msg);
@@ -63,7 +62,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // 刪除訂單
       if (text.startsWith('/delete ')) {
         const index = Number(text.split(' ')[1]);
         const ok = orderService.deleteOrder(index);
@@ -74,38 +72,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // 編輯訂單
-      if (text.startsWith('/edit ')) {
-        const parts = text.split(' ');
-        if (parts.length < 6) {
-          await safeReply(replyToken, '❌ 格式：/edit index 商品 數量 顏色 尺寸');
-          continue;
-        }
-
-        const index = Number(parts[1]);
-        const parsed = parseOrderText(`+ ${parts.slice(2).join(' ')}`);
-        if (!parsed.ok) {
-          await safeReply(replyToken, parsed.error);
-          continue;
-        }
-
-        const newOrder = {
-          productCode: parsed.order.productCode,
-          productName: parsed.order.productCode,
-          color: parsed.order.colors[0],
-          size: parsed.order.size,
-          quantity: parsed.order.qty
-        };
-
-        const ok = orderService.editOrder(index, newOrder);
-        await safeReply(
-          replyToken,
-          ok ? '✏️ 訂單已更新' : '❌ 訂單不存在'
-        );
-        continue;
-      }
-
-      // 斷貨
       if (text.startsWith('/out ')) {
         const code = text.split(' ')[1];
         const result = outOfStockService.handleOutOfStock(code);
@@ -115,7 +81,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
           `🚫 商品 ${code} 已斷貨\n已取消 ${result.removed} 筆訂單`
         );
 
-        // 通知群友
         for (const uid of result.affectedUsers) {
           try {
             await client.pushMessage(uid, {
@@ -129,7 +94,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
-      // 匯出發貨總表
       if (text === '/export') {
         const orders = orderService.getAllOrders();
         await sheetService.rebuildSummary(orders);
@@ -154,9 +118,18 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
         continue;
       }
 
+      // ⭐ 抓 LINE 顯示名稱
+      let userName = '未知';
+      try {
+        const profile = await client.getProfile(userId);
+        userName = profile.displayName;
+      } catch (e) {
+        console.error('Get profile failed:', e.message);
+      }
+
       const order = {
         userId,
-        userName: userId,
+        userName,
         productCode: parsed.order.productCode,
         productName: parsed.order.productCode,
         colors: parsed.order.colors,
@@ -172,7 +145,6 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 
       const addedOrders = orderService.addOrder(order);
 
-      // 同步寫入 Google Sheet
       for (const o of addedOrders) {
         await sheetService.appendOrder(o);
       }
