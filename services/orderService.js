@@ -1,16 +1,7 @@
-/**
- * orderService.js
- * 唯一訂單資料來源（orders.json）
- * - 群友下單（多色拆單）
- * - 團主修改 / 刪除
- */
-
 const fs = require('fs');
 const path = require('path');
 
 const ordersPath = path.join(__dirname, '../data/orders.json');
-
-/* ------------------ 基礎讀寫 ------------------ */
 
 function readOrders() {
   if (!fs.existsSync(ordersPath)) return [];
@@ -18,27 +9,16 @@ function readOrders() {
 }
 
 function saveOrders(data) {
-  fs.writeFileSync(ordersPath, JSON.stringify(data, null, 2), 'utf8');
+  fs.writeFileSync(ordersPath, JSON.stringify(data, null, 2));
 }
 
-/* ------------------ 新增訂單 ------------------ */
 /**
- * order = {
- *   userId,
- *   userName,
- *   productCode,
- *   productName,
- *   colors: ['BK','WH'],
- *   size,
- *   quantity
- * }
+ * 新增訂單（顏色拆單）
  */
 function addOrder(order) {
   const orders = readOrders();
-  const time = new Date().toISOString();
 
-  // 多色拆單
-  order.colors.forEach(color => {
+  for (const color of order.colors) {
     orders.push({
       userId: order.userId,
       userName: order.userName,
@@ -47,22 +27,38 @@ function addOrder(order) {
       color,
       size: order.size || '',
       quantity: order.quantity,
-      time
+      time: new Date().toISOString()
     });
-  });
+  }
 
   saveOrders(orders);
 }
 
-/* ------------------ 團主管理 ------------------ */
-
-// 取得所有訂單（for export / summary）
-function getAllOrders() {
-  return readOrders();
+/**
+ * 列出所有訂單（附 index）
+ */
+function listOrders() {
+  return readOrders().map((o, i) => ({
+    index: i,
+    ...o
+  }));
 }
 
-// 修改某一筆（團主用 index）
-function updateOrder(index, newOrder) {
+/**
+ * 刪除訂單
+ */
+function deleteOrder(index) {
+  const orders = readOrders();
+  if (!orders[index]) return false;
+  orders.splice(index, 1);
+  saveOrders(orders);
+  return true;
+}
+
+/**
+ * 編輯訂單（整筆覆蓋）
+ */
+function editOrder(index, newOrder) {
   const orders = readOrders();
   if (!orders[index]) return false;
 
@@ -70,24 +66,30 @@ function updateOrder(index, newOrder) {
     ...orders[index],
     ...newOrder
   };
-
   saveOrders(orders);
   return true;
 }
 
-// 刪除某一筆（團主用 index）
-function deleteOrder(index) {
+/**
+ * 斷貨：移除某商品所有訂單
+ */
+function removeByProductCode(code) {
   const orders = readOrders();
-  if (!orders[index]) return false;
+  const remain = orders.filter(o => o.productCode !== code);
+  const removed = orders.length - remain.length;
+  saveOrders(remain);
+  return removed;
+}
 
-  orders.splice(index, 1);
-  saveOrders(orders);
-  return true;
+function getAllOrders() {
+  return readOrders();
 }
 
 module.exports = {
   addOrder,
-  getAllOrders,
-  updateOrder,
-  deleteOrder
+  listOrders,
+  deleteOrder,
+  editOrder,
+  removeByProductCode,
+  getAllOrders
 };

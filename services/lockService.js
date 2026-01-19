@@ -1,14 +1,33 @@
-const products = require('../config/products');
+const fs = require('fs');
+const path = require('path');
 
-module.exports.isLocked = (productCode) => {
-  const product = products[productCode];
-  if (!product || !product.deadline) return false;
+const lockFile = path.join(__dirname, 'lock.json');
 
-  const today = new Date();
-  const deadline = new Date(product.deadline);
+function readLock() {
+  if (!fs.existsSync(lockFile)) {
+    return { locked: false };
+  }
+  return JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+}
 
-  today.setHours(0,0,0,0);
-  deadline.setHours(0,0,0,0);
+function saveLock(data) {
+  fs.writeFileSync(lockFile, JSON.stringify(data, null, 2));
+}
 
-  return today > deadline;
+function isLocked() {
+  return readLock().locked === true;
+}
+
+function lock() {
+  saveLock({ locked: true, lockedAt: new Date().toISOString() });
+}
+
+function unlock() {
+  saveLock({ locked: false });
+}
+
+module.exports = {
+  isLocked,
+  lock,
+  unlock
 };

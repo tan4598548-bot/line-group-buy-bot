@@ -1,43 +1,21 @@
-const fs = require('fs');
-const path = require('path');
+const orderService = require('./orderService');
 
-const ordersPath = path.join(__dirname, '../data/orders.json');
+async function handleOutOfStock(productCode, sendMessage) {
+  const removedCount = orderService.removeByProductCode(productCode);
 
-function readOrders() {
-  if (!fs.existsSync(ordersPath)) return {};
-  return JSON.parse(fs.readFileSync(ordersPath));
-}
-
-function saveOrders(data) {
-  fs.writeFileSync(ordersPath, JSON.stringify(data, null, 2));
-}
-
-module.exports.handleOutOfStock = async (client, productCode) => {
-  const orders = readOrders();
-  const notifiedUsers = [];
-
-  for (const userId in orders) {
-    const userOrders = orders[userId];
-    const remaining = userOrders.filter(o => o.product !== productCode);
-
-    if (remaining.length !== userOrders.length) {
-      // 有訂到該商品
-      try {
-        await client.pushMessage(userId, {
-          type: 'text',
-          text: `❌【斷貨通知】
-您訂購的商品 ${productCode} 已斷貨
-該筆訂單已自動取消，造成不便敬請見諒`
-        });
-        notifiedUsers.push(userId);
-      } catch (err) {
-        console.error('通知失敗', userId);
-      }
-
-      orders[userId] = remaining;
-    }
+  if (removedCount === 0) {
+    await sendMessage(`⚠️ 商品 ${productCode} 目前沒有任何訂單`);
+    return;
   }
 
-  saveOrders(orders);
-  return notifiedUsers.length;
+  await sendMessage(
+    `🚫 斷貨通知\n\n` +
+    `商品 ${productCode} 已斷貨\n` +
+    `❌ 已取消 ${removedCount} 筆訂單\n\n` +
+    `如有疑問請私訊團主`
+  );
+}
+
+module.exports = {
+  handleOutOfStock
 };
