@@ -1,33 +1,26 @@
-const fs = require('fs');
-const path = require('path');
+/**
+ * 鎖單服務
+ * true = 已截止
+ */
 
-const lockFile = path.join(__dirname, 'lock.json');
-
-function readLock() {
-  if (!fs.existsSync(lockFile)) {
-    return { locked: false };
-  }
-  return JSON.parse(fs.readFileSync(lockFile, 'utf8'));
-}
-
-function saveLock(data) {
-  fs.writeFileSync(lockFile, JSON.stringify(data, null, 2));
-}
-
-function isLocked() {
-  return readLock().locked === true;
-}
+let locked = false;
 
 function lock() {
-  saveLock({ locked: true, lockedAt: new Date().toISOString() });
+  locked = true;
+  console.log('🔒 Orders locked');
 }
 
 function unlock() {
-  saveLock({ locked: false });
+  locked = false;
+  console.log('🔓 Orders unlocked');
+}
+
+function isLocked() {
+  return locked;
 }
 
 module.exports = {
-  isLocked,
   lock,
-  unlock
+  unlock,
+  isLocked
 };

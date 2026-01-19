@@ -1,15 +1,6 @@
 module.exports = {
-  INVALID_FORMAT: '❌ 下單格式錯誤\n請使用：+ 商品代碼 數量 顏色代碼 尺寸\n例：+ A01 2 BK M',
+  ORDER_LOCKED: '⛔ 本團已截止下單，無法再新增訂單',
 
-  PRODUCT_NOT_FOUND: '❌ 商品代碼不存在，請確認後再下單',
-
-  ORDER_LOCKED: '⛔ 該商品已截止，無法再下單',
-
-  INVALID_QTY: '❌ 數量必須為正整數',
-
-  INVALID_COLOR: '❌ 顏色代碼錯誤，請確認商品可選顏色',
-
-  INVALID_SIZE: '❌ 尺寸錯誤，請確認商品可選尺寸',
-
-  ORDER_SUCCESS: '✅ 已成功加入訂單'
+  ORDER_SUCCESS: (order) =>
+    `✅ 下單成功\n商品：${order.productCode}\n數量：${order.qty}\n顏色：${order.colors.join(', ')}\n尺寸：${order.size}`
 };

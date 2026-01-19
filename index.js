@@ -1,89 +1,95 @@
-/**
- * index.js
- * LINE 團購 Bot 主程式（cron + webhook 安全版）
- */
-
 require('dotenv').config();
 const express = require('express');
 const line = require('@line/bot-sdk');
-const cron = require('node-cron');
 
+const { parseOrderText } = require('./utils/parser');
+const { validateOrder } = require('./utils/validator');
+const messages = require('./utils/messages');
+
+const lockService = require('./services/lockService');
 const reminderService = require('./services/reminderService');
-
-console.log('🚀 index.js loaded');
-console.log('⏱ Boot time:', new Date().toISOString());
+const orderService = require('./services/orderService');
 
 const app = express();
 
-const hasLineToken =
-  !!process.env.LINE_CHANNEL_ACCESS_TOKEN &&
-  !!process.env.LINE_CHANNEL_SECRET;
+/**
+ * LINE 設定（Render 環境 OK）
+ */
+const config = {
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || 'DUMMY',
+  channelSecret: process.env.LINE_CHANNEL_SECRET || 'DUMMY'
+};
 
-const config = hasLineToken
-  ? {
-      channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-      channelSecret: process.env.LINE_CHANNEL_SECRET,
-    }
-  : null;
+let client = null;
+if (process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+  client = new line.Client(config);
+}
 
-const client = hasLineToken ? new line.Client(config) : null;
+app.post('/webhook', line.middleware(config), async (req, res) => {
+  try {
+    const events = req.body.events || [];
 
-// =====================
-// Webhook（安全模式）
-// =====================
-app.post(
-  '/webhook',
-  hasLineToken ? line.middleware(config) : express.json(),
-  async (req, res) => {
-    try {
-      if (!hasLineToken) {
-        // 沒有 token → 只回 200，不做任何事
-        return res.sendStatus(200);
+    for (const event of events) {
+      if (event.type !== 'message' || event.message.type !== 'text') continue;
+
+      const userId = event.source.userId;
+      const text = event.message.text.trim();
+
+      // 只處理 + 開頭的下單
+      if (!text.startsWith('+')) continue;
+
+      // 🔒 已鎖單
+      if (lockService.isLocked()) {
+        await safeReply(event.replyToken, messages.ORDER_LOCKED);
+        continue;
       }
 
-      const events = req.body.events || [];
-
-      for (const event of events) {
-        if (
-          event.type === 'message' &&
-          event.message.type === 'text' &&
-          event.replyToken
-        ) {
-          await client.replyMessage(event.replyToken, {
-            type: 'text',
-            text: '✅ Bot 運行中',
-          });
-        }
+      // 解析
+      const parsed = parseOrderText(text);
+      if (!parsed.ok) {
+        await safeReply(event.replyToken, parsed.error);
+        continue;
       }
 
-      res.sendStatus(200);
-    } catch (err) {
-      console.error('❌ Webhook error:', err);
-      res.sendStatus(200);
+      // 驗證
+      const validation = validateOrder(parsed.order);
+      if (!validation.ok) {
+        await safeReply(event.replyToken, validation.error);
+        continue;
+      }
+
+      // 存訂單
+      orderService.addOrder(userId, parsed.order);
+
+      await safeReply(
+        event.replyToken,
+        messages.ORDER_SUCCESS(parsed.order)
+      );
     }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('Webhook error:', err);
+    res.sendStatus(200);
   }
-);
+});
 
-// =====================
-// 🔔 截止提醒 cron（每天 09:00）
-// =====================
-console.log('🕒 Registering deadline reminder cron...');
-
-cron.schedule(
-  '0 9 * * *',
-  () => {
-    console.log('⏰ [CRON] Deadline reminder triggered');
-    reminderService.checkDeadlines();
-  },
-  {
-    timezone: 'Asia/Taipei',
+async function safeReply(replyToken, text) {
+  if (!client || !replyToken) return;
+  try {
+    await client.replyMessage(replyToken, {
+      type: 'text',
+      text
+    });
+  } catch (e) {
+    console.error('Reply failed:', e.message);
   }
-);
+}
 
-console.log('✅ Deadline reminder cron scheduled');
+// 🚀 啟動 cron
+reminderService.start();
 
-// =====================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🌐 Server is running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
