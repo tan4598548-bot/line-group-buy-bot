@@ -2,29 +2,34 @@ require('dotenv').config();
 const express = require('express');
 const line = require('@line/bot-sdk');
 
+// utils
 const { parseOrderText } = require('./utils/parser');
 const { validateOrder } = require('./utils/validator');
 const messages = require('./utils/messages');
 
+// services
+const orderService = require('./services/orderService');
 const lockService = require('./services/lockService');
 const reminderService = require('./services/reminderService');
-const orderService = require('./services/orderService');
+const sheetService = require('./services/sheetService');
 
 const app = express();
 
 /**
- * LINE 設定（Render 環境 OK）
+ * LINE Bot 設定
  */
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || 'DUMMY',
   channelSecret: process.env.LINE_CHANNEL_SECRET || 'DUMMY'
 };
 
-let client = null;
-if (process.env.LINE_CHANNEL_ACCESS_TOKEN) {
-  client = new line.Client(config);
-}
+const client = process.env.LINE_CHANNEL_ACCESS_TOKEN
+  ? new line.Client(config)
+  : null;
 
+/**
+ * Webhook
+ */
 app.post('/webhook', line.middleware(config), async (req, res) => {
   try {
     const events = req.body.events || [];
@@ -32,37 +37,67 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
     for (const event of events) {
       if (event.type !== 'message' || event.message.type !== 'text') continue;
 
-      const userId = event.source.userId;
       const text = event.message.text.trim();
+      const userId = event.source.userId;
+      const replyToken = event.replyToken;
 
-      // 只處理 + 開頭的下單
+      /* ======================
+       * 團主管理指令
+       * ====================== */
+      if (text === '/export') {
+        const orders = orderService.getAllOrders();
+        await sheetService.rebuildSummary(orders);
+        await safeReply(replyToken, '📦 發貨總表已重新產生完成');
+        continue;
+      }
+
+      /* ======================
+       * 群友下單（+）
+       * ====================== */
       if (!text.startsWith('+')) continue;
 
-      // 🔒 已鎖單
+      // 已鎖單
       if (lockService.isLocked()) {
-        await safeReply(event.replyToken, messages.ORDER_LOCKED);
+        await safeReply(replyToken, messages.ORDER_LOCKED);
         continue;
       }
 
       // 解析
       const parsed = parseOrderText(text);
       if (!parsed.ok) {
-        await safeReply(event.replyToken, parsed.error);
+        await safeReply(replyToken, parsed.error);
         continue;
       }
+
+      // 組合完整訂單物件（給 orderService）
+      const order = {
+        userId,
+        userName: userId, // 之後可改成 profile name
+        productCode: parsed.order.productCode,
+        productName: parsed.order.productCode,
+        colors: parsed.order.colors,
+        size: parsed.order.size,
+        quantity: parsed.order.qty
+      };
 
       // 驗證
-      const validation = validateOrder(parsed.order);
+      const validation = validateOrder(order);
       if (!validation.ok) {
-        await safeReply(event.replyToken, validation.error);
+        await safeReply(replyToken, validation.error);
         continue;
       }
 
-      // 存訂單
-      orderService.addOrder(userId, parsed.order);
+      // 寫入 orders.json（顏色拆單）
+      const addedOrders = orderService.addOrder(order);
 
+      // 同步寫入 Google Sheet（每一筆）
+      for (const o of addedOrders) {
+        await sheetService.appendOrder(o);
+      }
+
+      // 成功回覆
       await safeReply(
-        event.replyToken,
+        replyToken,
         messages.ORDER_SUCCESS(parsed.order)
       );
     }
@@ -74,10 +109,13 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
   }
 });
 
-async function safeReply(replyToken, text) {
-  if (!client || !replyToken) return;
+/**
+ * 安全回覆（避免 401 / replyToken 過期）
+ */
+async function safeReply(token, text) {
+  if (!client || !token) return;
   try {
-    await client.replyMessage(replyToken, {
+    await client.replyMessage(token, {
       type: 'text',
       text
     });
@@ -86,9 +124,14 @@ async function safeReply(replyToken, text) {
   }
 }
 
-// 🚀 啟動 cron
+/**
+ * 啟動截止提醒 cron
+ */
 reminderService.start();
 
+/**
+ * Render 啟動
+ */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
