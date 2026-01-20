@@ -1,73 +1,56 @@
 /**
  * reminderService.js
- * 功能：截止前一天提醒（每天由 cron 呼叫）
+ * 功能：
+ * - 截止前一天提醒
+ * - 截止時間到自動鎖單
  */
 
-const fs = require('fs');
-const path = require('path');
-const products = require('../config/products');
+const cron = require('node-cron');
+const lockService = require('./lockService');
 
-const remindedPath = path.join(__dirname, 'reminded.json');
+const DEADLINE = process.env.ORDER_DEADLINE;
 
-function readReminded() {
-  if (!fs.existsSync(remindedPath)) return {};
-  return JSON.parse(fs.readFileSync(remindedPath));
-}
+function start() {
+  if (!DEADLINE) {
+    console.log('⚠️ 未設定 ORDER_DEADLINE，略過提醒與鎖單');
+    return;
+  }
 
-function saveReminded(data) {
-  fs.writeFileSync(remindedPath, JSON.stringify(data, null, 2));
-}
+  const deadline = new Date(DEADLINE.replace(' ', 'T'));
+  if (isNaN(deadline.getTime())) {
+    console.log('❌ ORDER_DEADLINE 格式錯誤');
+    return;
+  }
 
-function isTomorrow(dateStr) {
-  const today = new Date();
-  const target = new Date(dateStr);
+  console.log('⏰ 訂單截止時間：', deadline.toLocaleString());
 
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
+  /**
+   * 每分鐘檢查一次是否到截止時間
+   */
+  cron.schedule('* * * * *', () => {
+    const now = new Date();
 
-  return (
-    target.getFullYear() === tomorrow.getFullYear() &&
-    target.getMonth() === tomorrow.getMonth() &&
-    target.getDate() === tomorrow.getDate()
-  );
-}
-
-/**
- * 🔔 主入口：檢查所有商品截止日
- */
-function checkDeadlines() {
-  console.log('🔍 [Reminder] Checking deadlines...');
-
-  const reminded = readReminded();
-  let changed = false;
-
-  Object.values(products).forEach(product => {
-    if (!product.deadline) return;
-
-    if (isTomorrow(product.deadline)) {
-      if (reminded[product.code]) {
-        return; // 已提醒過
-      }
-
-      console.log(
-        `📣 [REMIND] 商品「${product.name}」將於 ${product.deadline} 截止`
-      );
-
-      // 標記已提醒
-      reminded[product.code] = {
-        remindedAt: new Date().toISOString(),
-      };
-      changed = true;
+    // 到截止時間 → 自動鎖單
+    if (now >= deadline && !lockService.isLocked()) {
+      lockService.lock();
+      console.log('✅ 已到截止時間，自動鎖單完成');
     }
   });
 
-  if (changed) {
-    saveReminded(reminded);
-  }
+  /**
+   * 截止前一天 09:00 提醒（只 log，之後可接 push）
+   */
+  const reminderTime = new Date(deadline);
+  reminderTime.setDate(reminderTime.getDate() - 1);
 
-  console.log('✅ [Reminder] Check finished');
+  cron.schedule(
+    `${reminderTime.getMinutes()} ${reminderTime.getHours()} ${reminderTime.getDate()} ${reminderTime.getMonth() + 1} *`,
+    () => {
+      console.log('🔔 截止前一天提醒：訂單即將截止');
+    }
+  );
 }
 
 module.exports = {
-  checkDeadlines,
+  start
 };
