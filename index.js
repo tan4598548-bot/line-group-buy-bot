@@ -45,6 +45,6 @@ app.get("/api/buyer/orders", async (req, res) => {
    啟動
 ===================== */
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
+app.listen(PORT,'0.0.0.0' () => {
   console.log("Server running on", PORT);
 });
