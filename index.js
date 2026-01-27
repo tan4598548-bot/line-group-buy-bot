@@ -1,125 +1,125 @@
-require('dotenv').config();
-const express = require('express');
-const line = require('@line/bot-sdk');
-const cron = require('node-cron');
+/**
+ * index.js
+ * 最終整合主入口
+ * - LINE webhook
+ * - LIFF / API（買家 / 版主）
+ * - 到貨 / 出貨
+ * - cron：商品結單前一天提醒
+ */
 
-const orderService = require('./services/orderService');
-const reminderService = require('./services/reminderService');
-const vendorSheetService = require('./services/vendorSheetService');
+import express from 'express';
+import bodyParser from 'body-parser';
+import dotenv from 'dotenv';
+import line from '@line/bot-sdk';
 
-const { parseOrderText } = require('./utils/parser');
-const { validateOrder } = require('./utils/validator');
+// === 載入環境變數 ===
+dotenv.config();
 
-const app = express();
-
-const config = {
+// === LINE 設定 ===
+const lineConfig = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET
+  channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
+const lineClient = new line.Client(lineConfig);
 
-const client = new line.Client(config);
+// === Services ===
+import { handleOrderMessage } from './services/orderService.js';
+import { handleArrivedMessage } from './services/arrivedService.js';
+import { handleShippingMessage } from './services/shippingService.js';
+import { getMyPendingOrders } from './services/queryService.js';
 
-/**
- * 🔔 截止前一天自動提醒
- */
-cron.schedule('0 9 * * *', async () => {
-  console.log('⏰ Cron: deadline reminder check');
-  await reminderService.sendDeadlineReminders(client);
-});
+// cron（你剛剛打不到的就是這個）
+import { runProductCloseReminder } from './cron/cronProductReminder.js';
 
-/**
- * 📩 LINE Webhook
- */
-app.post('/webhook', line.middleware(config), async (req, res) => {
-  try {
-    const events = req.body.events || [];
+// === Express ===
+const app = express();
+app.use(bodyParser.json());
 
-    for (const event of events) {
-      if (event.type !== 'message' || event.message.type !== 'text') continue;
+/* ======================================================
+ * 1️⃣ LINE Webhook
+ * ====================================================== */
+app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
+  const events = req.body.events;
 
-      const text = event.message.text.trim();
-      const userId = event.source.userId;
-      const userName = event.source.profile?.displayName || '群友';
+  for (const event of events) {
+    if (event.type !== 'message' || event.message.type !== 'text') continue;
 
-      /** =====================
-       * 👤 群友功能
-       * ===================== */
+    const text = event.message.text.trim();
+    const replyToken = event.replyToken;
+    const userId = event.source.userId;
 
-      if (text === '我的訂單') {
-        const orders = orderService
-          .getAllOrders()
-          .filter(o => o.userId === userId);
+    let replyText = null;
 
-        if (orders.length === 0) {
-          await client.replyMessage(event.replyToken, {
-            type: 'text',
-            text: '目前沒有未到貨的訂單'
-          });
-          continue;
-        }
-
-        const msg = orders.map(
-          (o, i) =>
-            `${i + 1}. ${o.productName} ${o.color || ''} ${o.size || ''} x${o.quantity}`
-        ).join('\n');
-
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: `🧾 你的未到貨訂單：\n\n${msg}`
-        });
-        continue;
+    try {
+      // 下單
+      if (text.startsWith('下單')) {
+        replyText = await handleOrderMessage(text, event);
       }
 
-      /** =====================
-       * 🛒 群友下單
-       * ===================== */
-      const parsed = parseOrderText(text);
-      if (parsed) {
-        const check = validateOrder(parsed);
-        if (!check.ok) {
-          await client.replyMessage(event.replyToken, {
-            type: 'text',
-            text: `❌ ${check.message}`
-          });
-          continue;
-        }
-
-        orderService.addOrder({
-          ...parsed,
-          userId,
-          userName
-        });
-
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: `✅ 已收到訂單：\n${parsed.productName} x${parsed.quantity}`
-        });
-        continue;
+      // 到貨
+      else if (text.startsWith('到貨')) {
+        replyText = await handleArrivedMessage(text);
       }
 
-      /** =====================
-       * 👑 團主功能
-       * ===================== */
-      if (text === '結單') {
-        const orders = orderService.getAllOrders();
-
-        await vendorSheetService.buildVendorOrders(orders);
-
-        await client.replyMessage(event.replyToken, {
-          type: 'text',
-          text: '📦 已結單\n✅ 已產生「廠商訂貨表」'
-        });
-        continue;
+      // 出貨
+      else if (text.startsWith('出貨')) {
+        replyText = await handleShippingMessage(text);
       }
+
+      // 查詢（買家）
+      else if (text === '查詢') {
+        replyText = await getMyPendingOrders(userId);
+      }
+
+      if (replyText) {
+        await lineClient.replyMessage(replyToken, {
+          type: 'text',
+          text: replyText,
+        });
+      }
+    } catch (err) {
+      console.error('Webhook error:', err);
+      await lineClient.replyMessage(replyToken, {
+        type: 'text',
+        text: '❌ 系統發生錯誤，請稍後再試',
+      });
     }
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error('Webhook error:', err);
-    res.sendStatus(200);
   }
+
+  res.sendStatus(200);
 });
 
+/* ======================================================
+ * 2️⃣ API：買家查詢（LIFF / 瀏覽器）
+ * ====================================================== */
+app.get('/api/mypending', async (req, res) => {
+  const userId = req.query.userId;
+  if (!userId) {
+    return res.status(400).send('Missing userId');
+  }
+
+  const result = await getMyPendingOrders(userId);
+  res.send(result);
+});
+
+/* ======================================================
+ * 3️⃣ Cron：商品結單前一天提醒（20:00）
+ * 👉 Render Cron 會打這支
+ * ====================================================== */
+app.get('/cron/product-close-reminder', (req, res) => {
+  const message = runProductCloseReminder();
+
+  if (!message) {
+    return res.send('No reminder');
+  }
+
+  // 這裡「只回傳文字」，你複製貼群
+  res.send(message);
+});
+
+/* ======================================================
+ * 4️⃣ Server 啟動
+ * ====================================================== */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
