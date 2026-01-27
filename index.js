@@ -1,10 +1,10 @@
 import express from "express";
 import bodyParser from "body-parser";
-import { getProducts, setProductActive, closeProduct } from "./services/sheetService.js";
+import { getProducts, updateProductStatus, markProductClosed } from "./services/sheetService.js";
 import { getBuyerOrders } from "./services/orderService.js";
 
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
 
 /* =====================
    商品清單（LIFF）
@@ -19,7 +19,7 @@ app.get("/api/products", async (req, res) => {
 ===================== */
 app.post("/api/product/active", async (req, res) => {
   const { productCode, active } = req.body;
-  await setProductActive(productCode, active);
+  await updateProductStatus(productCode, active);
   res.json({ ok: true });
 });
 
@@ -28,7 +28,7 @@ app.post("/api/product/active", async (req, res) => {
 ===================== */
 app.post("/api/product/close", async (req, res) => {
   const { productCode } = req.body;
-  await closeProduct(productCode);
+  await markProductClosed(productCode);
   res.json({ ok: true });
 });
 
