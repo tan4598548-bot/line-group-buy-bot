@@ -1,19 +1,21 @@
 const orderService = require('./orderService');
 
-async function handleOutOfStock(productCode, sendMessage) {
-  const removedCount = orderService.removeByProductCode(productCode);
+/**
+ * 商品斷貨處理
+ * 回傳：{ removed, affectedUsers }
+ */
+function handleOutOfStock(productCode) {
+  const orders = orderService.getAllOrders();
 
-  if (removedCount === 0) {
-    await sendMessage(`⚠️ 商品 ${productCode} 目前沒有任何訂單`);
-    return;
-  }
+  const affected = orders.filter(o => o.productCode === productCode);
+  const affectedUsers = [...new Set(affected.map(o => o.userId))];
 
-  await sendMessage(
-    `🚫 斷貨通知\n\n` +
-    `商品 ${productCode} 已斷貨\n` +
-    `❌ 已取消 ${removedCount} 筆訂單\n\n` +
-    `如有疑問請私訊團主`
-  );
+  const removed = orderService.removeByProductCode(productCode);
+
+  return {
+    removed,
+    affectedUsers
+  };
 }
 
 module.exports = {

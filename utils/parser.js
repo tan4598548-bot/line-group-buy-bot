@@ -1,39 +1,28 @@
 /**
- * 解析下單格式
- * + A01 2 BK,BL M
+ * 解析下單格式：
+ * A01 2 BK M
+ * A01 1 BK,M L
  */
 
-function parseOrderText(text) {
-  const raw = text.replace('+', '').trim();
-  const parts = raw.split(/\s+/);
+function parseOrder(text) {
+  const parts = text.trim().split(/\s+/);
+  if (parts.length < 3) return null;
 
-  if (parts.length < 4) {
-    return { ok: false, error: '❌ 格式錯誤\n正確格式：+ 商品代碼 數量 顏色 尺寸' };
-  }
+  const productCode = parts[0];
+  const quantity = Number(parts[1]);
+  if (isNaN(quantity) || quantity <= 0) return null;
 
-  const [productCode, qtyStr, colorStr, size] = parts;
+  const colorPart = parts[2];
+  const size = parts[3] || '';
 
-  const qty = Number(qtyStr);
-  if (isNaN(qty) || qty <= 0) {
-    return { ok: false, error: '❌ 數量必須是正整數' };
-  }
-
-  const colors = colorStr.split(',').map(c => c.trim()).filter(Boolean);
-  if (colors.length === 0) {
-    return { ok: false, error: '❌ 顏色不可空白' };
-  }
+  const colors = colorPart.split(',').map(c => c.toUpperCase());
 
   return {
-    ok: true,
-    order: {
-      productCode,
-      qty,
-      colors,
-      size
-    }
+    productCode,
+    quantity,
+    colors,
+    size,
   };
 }
 
-module.exports = {
-  parseOrderText
-};
+module.exports = { parseOrder };

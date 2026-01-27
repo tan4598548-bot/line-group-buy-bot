@@ -1,23 +1,23 @@
-/**
- * 驗證訂單內容（基本版）
- */
+const products = require('../config/products');
 
 function validateOrder(order) {
-  if (!order.productCode) {
-    return { ok: false, error: '❌ 商品代碼錯誤' };
+  const product = products[order.productCode];
+  if (!product) return '❌ 商品代碼不存在';
+
+  if (order.size && product.sizes && !product.sizes.includes(order.size)) {
+    return '❌ 尺寸錯誤';
   }
 
-  if (!order.size) {
-    return { ok: false, error: '❌ 請填寫尺寸' };
-  }
+  order.colors.forEach(c => {
+    if (product.colors && !product.colors.includes(c)) {
+      throw new Error(`❌ 顏色 ${c} 不存在`);
+    }
+  });
 
-  if (!Array.isArray(order.colors) || order.colors.length === 0) {
-    return { ok: false, error: '❌ 請至少選擇一個顏色' };
-  }
-
-  return { ok: true };
+  return {
+    productName: product.name,
+    price: product.price,
+  };
 }
 
-module.exports = {
-  validateOrder
-};
+module.exports = { validateOrder };

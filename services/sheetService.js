@@ -1,118 +1,157 @@
-/**
- * sheetService.js
- * 功能：
- * - 將訂單寫入 Google Sheet
- * - 依商品彙總（發貨用）
- */
+import { google } from "googleapis";
 
-const { google } = require('googleapis');
-const path = require('path');
+/* =========================
+   Google Sheet 基本設定
+========================= */
 
-// 🔑 服務帳戶金鑰檔（請放在專案根目錄，並加到 .gitignore）
-const KEY_FILE = path.join(__dirname, '..', 'google-service-account.json');
-
-// 📊 Google Sheet 設定
-const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
-
-// Sheet 名稱（請與你 Sheet 分頁名稱一致）
-const SHEET_ORDERS = 'Orders';      // 訂單明細
-const SHEET_SUMMARY = 'Summary';    // 發貨總表
-
-// 建立 auth client
 const auth = new google.auth.GoogleAuth({
-  keyFile: KEY_FILE,
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  // 請確保 Render 的 Environment Variables 有設定此項
+  credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON),
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
-// 取得 sheets API
-async function getSheets() {
-  const client = await auth.getClient();
-  return google.sheets({ version: 'v4', auth: client });
+const sheets = google.sheets({ version: "v4", auth });
+
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+
+/* Sheet 名稱定義 */
+const PRODUCT_SHEET = "Products";
+const ORDER_SHEET = "Orders";
+
+/* =========================
+   工具：讀取整張 Sheet
+========================= */
+
+async function readSheet(sheetName) {
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: sheetName,
+    });
+    return res.data.values || [];
+  } catch (error) {
+    console.error(`讀取 ${sheetName} 失敗:`, error);
+    return [];
+  }
 }
 
-/**
- * ➕ 新增一筆訂單（明細）
- * order = {
- *   userName,
- *   userId,
- *   productCode,
- *   productName,
- *   color,
- *   size,
- *   quantity,
- *   time
- * }
- */
-async function appendOrder(order) {
-  const sheets = await getSheets();
+/* =========================
+   工具：寫入指定儲存格
+========================= */
 
-  const values = [[
-    order.time,
-    order.userName,
-    order.userId,
-    order.productCode,
-    order.productName,
-    order.color || '',
-    order.size || '',
-    order.quantity,
-  ]];
-
-  await sheets.spreadsheets.values.append({
+async function writeCell(sheetName, cell, value) {
+  await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEET_ORDERS}!A:H`,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: { values },
-  });
-}
-
-/**
- * 📊 重新產生「發貨總表」
- * orders = array of order objects
- * 依 商品 → 顏色 → 尺寸 → 群友 彙總
- */
-async function rebuildSummary(orders) {
-  const sheets = await getSheets();
-
-  // 先清空 Summary
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEET_SUMMARY}!A:Z`,
-  });
-
-  // 標題列
-  const header = [[
-    '商品代碼',
-    '商品名稱',
-    '顏色',
-    '尺寸',
-    '群友',
-    '數量',
-  ]];
-
-  const rows = [];
-
-  orders.forEach(o => {
-    rows.push([
-      o.productCode,
-      o.productName,
-      o.color || '',
-      o.size || '',
-      o.userName,
-      o.quantity,
-    ]);
-  });
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEET_SUMMARY}!A:F`,
-    valueInputOption: 'USER_ENTERED',
+    range: `${sheetName}!${cell}`,
+    valueInputOption: "RAW",
     requestBody: {
-      values: [...header, ...rows],
+      values: [[value]],
     },
   });
 }
 
-module.exports = {
-  appendOrder,
-  rebuildSummary,
-};
+/* =========================
+   工具：新增一列資料 (用於下單)
+========================= */
+
+export async function appendRow(sheetName, dataObject) {
+  // 先讀取標題列以確保資料對齊
+  const rows = await readSheet(sheetName);
+  const headers = rows[0] || [];
+  
+  // 依照標題順序排列資料
+  const newRow = headers.map(h => dataObject[h] || "");
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A1`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [newRow],
+    },
+  });
+}
+
+/* =========================
+   取得 Products（物件化）
+========================= */
+
+export async function getProducts() {
+  const rows = await readSheet(PRODUCT_SHEET);
+  if (rows.length <= 1) return [];
+
+  const headers = rows[0];
+
+  return rows.slice(1).map((row, index) => {
+    const obj = {};
+    headers.forEach((h, i) => {
+      obj[h] = row[i] || "";
+    });
+    obj._rowNumber = index + 2; // Sheet 實際列號
+    return obj;
+  });
+}
+
+/* =========================
+   取得買家訂單 (用於 API / LIFF 查詢)
+========================= */
+
+export async function getBuyerOrders(userId) {
+  const rows = await readSheet(ORDER_SHEET);
+  if (rows.length <= 1) return [];
+
+  const headers = rows[0];
+  const allOrders = rows.slice(1).map(row => {
+    const obj = {};
+    headers.forEach((h, i) => {
+      obj[h] = row[i] || "";
+    });
+    return obj;
+  });
+
+  // 如果有提供 userId 則進行過濾
+  return userId ? allOrders.filter(o => o.userId === userId) : allOrders;
+}
+
+/* =========================
+   商品上下架
+========================= */
+
+export async function updateProductStatus(productCode, active) {
+  const products = await getProducts();
+  const target = products.find(p => p.productCode === productCode);
+  if (!target) throw new Error("商品不存在");
+
+  const headers = Object.keys(target).filter(k => !k.startsWith('_'));
+  const colIndex = headers.indexOf("active");
+  if (colIndex === -1) throw new Error("找不到 active 欄位");
+  
+  const colLetter = String.fromCharCode(65 + colIndex);
+  await writeCell(PRODUCT_SHEET, `${colLetter}${target._rowNumber}`, active ? "TRUE" : "FALSE");
+}
+
+/* =========================
+   手動結單
+========================= */
+
+export async function markProductClosed(productCode) {
+  const products = await getProducts();
+  const target = products.find(p => p.productCode === productCode);
+  if (!target) throw new Error("商品不存在");
+
+  const headers = Object.keys(target).filter(k => !k.startsWith('_'));
+
+  const closedCol = headers.indexOf("closed");
+  if (closedCol >= 0) {
+    const colLetter = String.fromCharCode(65 + closedCol);
+    await writeCell(PRODUCT_SHEET, `${colLetter}${target._rowNumber}`, "TRUE");
+  }
+
+  const activeCol = headers.indexOf("active");
+  if (activeCol >= 0) {
+    const colLetter = String.fromCharCode(65 + activeCol);
+    await writeCell(PRODUCT_SHEET, `${colLetter}${target._rowNumber}`, "FALSE");
+  }
+}
+
+// ... 你的其餘工具函式 (如 getTomorrowClosingProducts) 可依需求保留 ...

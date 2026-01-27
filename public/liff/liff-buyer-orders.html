@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>我的訂單</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: system-ui; background:#f7f7f7; padding:12px }
+    h2 { margin-top:16px }
+    .item {
+      background:#fff; padding:10px; border-radius:8px;
+      margin-bottom:8px; box-shadow:0 2px 6px rgba(0,0,0,.08)
+    }
+    .status { font-size:13px; color:#555 }
+  </style>
+</head>
+<body>
+
+<h2>⏳ 等待出貨</h2>
+<div id="pending">載入中…</div>
+
+<h2>🚚 已出貨</h2>
+<div id="shipped">載入中…</div>
+
+<script>
+const API = "https://line-group-buy-bot-api.onrender.com"; // 改成你的
+async function init() {
+  await liff.init({ liffId: "YOUR_LIFF_ID" });
+  const profile = await liff.getProfile();
+  load(profile.userId);
+}
+
+async function load(userId) {
+  const res = await fetch(`${API}/api/buyer/orders?userId=${userId}`);
+  const { pending, shipped } = await res.json();
+
+  render("pending", pending);
+  render("shipped", shipped);
+}
+
+function render(id, list) {
+  const el = document.getElementById(id);
+  el.innerHTML = "";
+  if (!list.length) {
+    el.innerHTML = "<div class='item'>（沒有）</div>";
+    return;
+  }
+  list.forEach(o => {
+    const div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML = `
+      <strong>${o.productName}</strong><br>
+      ${o.color} × ${o.qty}<br>
+      <span class="status">${o.status}</span>
+    `;
+    el.appendChild(div);
+  });
+}
+
+init();
+</script>
+</body>
+</html>

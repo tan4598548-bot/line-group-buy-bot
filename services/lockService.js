@@ -1,18 +1,23 @@
-/**
- * lockService.js
- * 功能：管理是否鎖單
- */
+const vendorOrderService = require('./vendorOrderService');
 
 let locked = false;
 
-function lock() {
+async function lock() {
+  if (locked) return;
+
   locked = true;
-  console.log('🔒 訂單已自動鎖定');
+  console.log('🔒 鎖單完成，開始產生廠商訂貨表');
+
+  try {
+    await vendorOrderService.exportVendorOrders();
+    console.log('📄 廠商訂貨表已產生');
+  } catch (err) {
+    console.error('❌ 產生廠商訂貨表失敗', err);
+  }
 }
 
 function unlock() {
   locked = false;
-  console.log('🔓 訂單已解鎖');
 }
 
 function isLocked() {

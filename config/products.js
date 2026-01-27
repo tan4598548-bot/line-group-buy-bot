@@ -1,13 +1,12 @@
 module.exports = {
   A01: {
-    name: '純棉T恤',
-    sizes: ['S', 'M', 'L', 'XL', '2XL'],
-    colors: {
-      RD: '紅',
-      BK: '黑',
-      GY: '灰',
-      FG: '螢光綠'
-    },
-    deadline: '2026-03-31'
+    name: '團購商品 A01',
+    colors: ['BK', 'BL', 'GN', 'GY'],
+    sizes: ['S', 'M', 'L', 'XL', '2XL']
+  },
+  B02: {
+    name: '團購商品 B02',
+    colors: ['BK', 'WH'],
+    sizes: ['M', 'L']
   }
 };

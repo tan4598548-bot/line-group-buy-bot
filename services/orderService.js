@@ -1,95 +1,53 @@
-const fs = require('fs');
-const path = require('path');
+import * as sheetService from './sheetService.js';
 
-const ordersPath = path.join(__dirname, '../data/orders.json');
+export async function handleOrder(text, event) {
+  const userId = event.source.userId;
 
-function readOrders() {
-  if (!fs.existsSync(ordersPath)) return [];
-  return JSON.parse(fs.readFileSync(ordersPath, 'utf8'));
-}
+  // 解析訊息內容，例如：+P001 紅色 L 2
+  const parts = text.replace('+', '').trim().split(' ');
+  const [productCode, colorCode, size, qtyStr] = parts;
+  const qty = Number(qtyStr || 1);
 
-function saveOrders(data) {
-  fs.writeFileSync(ordersPath, JSON.stringify(data, null, 2));
-}
+  // 取得商品清單
+  const products = await sheetService.getProducts();
+  const product = products.find(p => p.productCode === productCode);
 
-/**
- * 新增訂單（顏色拆單）
- */
-function addOrder(order) {
-  const orders = readOrders();
-
-  for (const color of order.colors) {
-    orders.push({
-      userId: order.userId,
-      userName: order.userName,
-      productCode: order.productCode,
-      productName: order.productName,
-      color,
-      size: order.size || '',
-      quantity: order.quantity,
-      time: new Date().toISOString()
-    });
+  if (!product) {
+    return { type: 'text', text: '❌ 找不到此商品代號' };
   }
 
-  saveOrders(orders);
-}
+  // 檢查商品狀態 (對應 Sheet 中的 active 欄位)
+  if (product.active === 'FALSE' || product.closed === 'TRUE') {
+    return { type: 'text', text: '⚠️ 此商品已鎖單 / 停售，無法下單' };
+  }
 
-/**
- * 列出所有訂單（附 index）
- */
-function listOrders() {
-  return readOrders().map((o, i) => ({
-    index: i,
-    ...o
-  }));
-}
+  // 顏色名稱轉換
+  const colorMap = product.colorMap || '';
+  let colorName = colorCode;
+  colorMap.split(',').forEach(c => {
+    const [code, name] = c.split(':');
+    if (code === colorCode) colorName = name;
+  });
 
-/**
- * 刪除訂單
- */
-function deleteOrder(index) {
-  const orders = readOrders();
-  if (!orders[index]) return false;
-  orders.splice(index, 1);
-  saveOrders(orders);
-  return true;
-}
+  // 寫入訂單 (對應 Sheet 中的 Orders 分頁)
+  // 請確保 Orders 分頁第一列標題包含這些關鍵字
+  await sheetService.appendRow('Orders', {
+    userId: userId,
+    productCode: productCode,
+    colorCode: colorCode,
+    colorName: colorName,
+    size: size,
+    qty: qty,
+    orderDate: new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })
+  });
 
-/**
- * 編輯訂單（整筆覆蓋）
- */
-function editOrder(index, newOrder) {
-  const orders = readOrders();
-  if (!orders[index]) return false;
-
-  orders[index] = {
-    ...orders[index],
-    ...newOrder
+  return {
+    type: 'text',
+    text: `✅ 下單成功\n商品：${product.productName}\n規格：${colorName} ${size} x${qty}`,
   };
-  saveOrders(orders);
-  return true;
 }
 
-/**
- * 斷貨：移除某商品所有訂單
- */
-function removeByProductCode(code) {
-  const orders = readOrders();
-  const remain = orders.filter(o => o.productCode !== code);
-  const removed = orders.length - remain.length;
-  saveOrders(remain);
-  return removed;
+// 買家訂單查詢
+export async function getBuyerOrders(userId) {
+  return await sheetService.getBuyerOrders(userId);
 }
-
-function getAllOrders() {
-  return readOrders();
-}
-
-module.exports = {
-  addOrder,
-  listOrders,
-  deleteOrder,
-  editOrder,
-  removeByProductCode,
-  getAllOrders
-};

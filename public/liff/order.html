@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>團購下單</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 16px; }
+    h2 { margin-top: 0; }
+    select, input, button {
+      width: 100%;
+      margin: 8px 0;
+      padding: 8px;
+      font-size: 16px;
+    }
+    button {
+      background: #06c755;
+      color: white;
+      border: none;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <h2 id="productTitle">商品</h2>
+
+  <label>顏色</label>
+  <select id="color"></select>
+
+  <label>尺寸（如無可留空）</label>
+  <input id="size" placeholder="M / L / XL" />
+
+  <label>數量</label>
+  <input id="qty" type="number" value="1" min="1" />
+
+  <button onclick="submitOrder()">送出訂單</button>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const productCode = params.get('product');
+
+    async function init() {
+      await liff.init({ liffId: '@520vlvsk' });
+
+      const res = await fetch(`/api/liff/product?code=${productCode}`);
+      const product = await res.json();
+
+      document.getElementById('productTitle').innerText =
+        `${product.productCode}｜${product.productName}`;
+
+      const colorSelect = document.getElementById('color');
+      product.colors.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.code;
+        opt.innerText = `(${c.code}) ${c.name}`;
+        colorSelect.appendChild(opt);
+      });
+    }
+
+    async function submitOrder() {
+      const color = document.getElementById('color').value;
+      const size = document.getElementById('size').value;
+      const qty = document.getElementById('qty').value;
+
+      let text = `+${productCode} ${color}`;
+      if (size) text += ` ${size}`;
+      text += ` ${qty}`;
+
+      await liff.sendMessages([{ type: 'text', text }]);
+      liff.closeWindow();
+    }
+
+    init();
+  </script>
+</body>
+</html>
