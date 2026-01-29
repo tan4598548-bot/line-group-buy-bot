@@ -5,75 +5,40 @@ import { google } from "googleapis";
 ========================= */
 
 const auth = new google.auth.GoogleAuth({
-  // 請確保 Render 的 Environment Variables 有設定此項
   credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON),
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
 const sheets = google.sheets({ version: "v4", auth });
-
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
-/* Sheet 名稱定義 */
+/* Sheet 名稱 */
 const PRODUCT_SHEET = "Products";
 const ORDER_SHEET = "Orders";
 
 /* =========================
-   工具：讀取整張 Sheet
+   共用工具
 ========================= */
 
 async function readSheet(sheetName) {
-  try {
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: sheetName,
-    });
-    return res.data.values || [];
-  } catch (error) {
-    console.error(`讀取 ${sheetName} 失敗:`, error);
-    return [];
-  }
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: sheetName,
+  });
+  return res.data.values || [];
 }
-
-/* =========================
-   工具：寫入指定儲存格
-========================= */
 
 async function writeCell(sheetName, cell, value) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: `${sheetName}!${cell}`,
     valueInputOption: "RAW",
-    requestBody: {
-      values: [[value]],
-    },
+    requestBody: { values: [[value]] },
   });
 }
 
 /* =========================
-   工具：新增一列資料 (用於下單)
-========================= */
-
-export async function appendRow(sheetName, dataObject) {
-  // 先讀取標題列以確保資料對齊
-  const rows = await readSheet(sheetName);
-  const headers = rows[0] || [];
-  
-  // 依照標題順序排列資料
-  const newRow = headers.map(h => dataObject[h] || "");
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A1`,
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [newRow],
-    },
-  });
-}
-
-/* =========================
-   取得 Products（物件化）
+   Products
 ========================= */
 
 export async function getProducts() {
@@ -82,76 +47,147 @@ export async function getProducts() {
 
   const headers = rows[0];
 
-  return rows.slice(1).map((row, index) => {
+  return rows.slice(1).map((row, idx) => {
     const obj = {};
     headers.forEach((h, i) => {
-      obj[h] = row[i] || "";
+      obj[h] = row[i] ?? "";
     });
-    obj._rowNumber = index + 2; // Sheet 實際列號
+    obj._rowNumber = idx + 2;
     return obj;
   });
 }
-
-/* =========================
-   取得買家訂單 (用於 API / LIFF 查詢)
-========================= */
-
-export async function getBuyerOrders(userId) {
-  const rows = await readSheet(ORDER_SHEET);
-  if (rows.length <= 1) return [];
-
-  const headers = rows[0];
-  const allOrders = rows.slice(1).map(row => {
-    const obj = {};
-    headers.forEach((h, i) => {
-      obj[h] = row[i] || "";
-    });
-    return obj;
-  });
-
-  // 如果有提供 userId 則進行過濾
-  return userId ? allOrders.filter(o => o.userId === userId) : allOrders;
-}
-
-/* =========================
-   商品上下架
-========================= */
 
 export async function updateProductStatus(productCode, active) {
   const products = await getProducts();
-  const target = products.find(p => p.productCode === productCode);
-  if (!target) throw new Error("商品不存在");
+  const p = products.find(p => p.productCode === productCode);
+  if (!p) throw new Error("商品不存在");
 
-  const headers = Object.keys(target).filter(k => !k.startsWith('_'));
-  const colIndex = headers.indexOf("active");
-  if (colIndex === -1) throw new Error("找不到 active 欄位");
-  
-  const colLetter = String.fromCharCode(65 + colIndex);
-  await writeCell(PRODUCT_SHEET, `${colLetter}${target._rowNumber}`, active ? "TRUE" : "FALSE");
+  const headers = Object.keys(p).filter(k => !k.startsWith("_"));
+  const col = headers.indexOf("active");
+  if (col === -1) throw new Error("缺少 active 欄位");
+
+  const colLetter = String.fromCharCode(65 + col);
+  await writeCell(PRODUCT_SHEET, `${colLetter}${p._rowNumber}`, active ? "TRUE" : "FALSE");
 }
-
-/* =========================
-   手動結單
-========================= */
 
 export async function markProductClosed(productCode) {
   const products = await getProducts();
-  const target = products.find(p => p.productCode === productCode);
-  if (!target) throw new Error("商品不存在");
+  const p = products.find(p => p.productCode === productCode);
+  if (!p) throw new Error("商品不存在");
 
-  const headers = Object.keys(target).filter(k => !k.startsWith('_'));
+  const headers = Object.keys(p).filter(k => !k.startsWith("_"));
 
-  const closedCol = headers.indexOf("closed");
-  if (closedCol >= 0) {
-    const colLetter = String.fromCharCode(65 + closedCol);
-    await writeCell(PRODUCT_SHEET, `${colLetter}${target._rowNumber}`, "TRUE");
-  }
-
-  const activeCol = headers.indexOf("active");
-  if (activeCol >= 0) {
-    const colLetter = String.fromCharCode(65 + activeCol);
-    await writeCell(PRODUCT_SHEET, `${colLetter}${target._rowNumber}`, "FALSE");
+  for (const field of ["closed", "active"]) {
+    const col = headers.indexOf(field);
+    if (col >= 0) {
+      const colLetter = String.fromCharCode(65 + col);
+      await writeCell(
+        PRODUCT_SHEET,
+        `${colLetter}${p._rowNumber}`,
+        field === "closed" ? "TRUE" : "FALSE"
+      );
+    }
   }
 }
 
-// ... 你的其餘工具函式 (如 getTomorrowClosingProducts) 可依需求保留 ...
+/* =========================
+   Orders（欄位鎖死）
+========================= */
+/*
+建議 Orders Sheet Header：
+userId | productCode | productName | qty | price | subtotal | status | locked | createdAt
+*/
+
+function mapOrderRows() {
+  return readSheet(ORDER_SHEET).then(rows => {
+    if (rows.length <= 1) return [];
+    const headers = rows[0];
+    return rows.slice(1).map(row => {
+      const o = {};
+      headers.forEach((h, i) => (o[h] = row[i] ?? ""));
+      return o;
+    });
+  });
+}
+
+export async function appendOrder(order) {
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${ORDER_SHEET}!A1`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        order.userId,
+        order.productCode,
+        order.productName,
+        Number(order.qty),
+        Number(order.price),
+        Number(order.subtotal),
+        order.status,
+        order.locked ? "TRUE" : "FALSE",
+        order.createdAt
+      ]]
+    }
+  });
+}
+
+export async function getBuyerOrders(userId) {
+  const orders = await mapOrderRows();
+  return userId ? orders.filter(o => o.userId === userId) : orders;
+}
+
+export async function getOrdersByUserAndProduct(userId, productCode) {
+  const orders = await mapOrderRows();
+  return orders.filter(
+    o => o.userId === userId && o.productCode === productCode
+  );
+}
+
+/* =========================
+   只看「尚未出貨」
+========================= */
+
+export async function getBuyerPendingOrders(userId) {
+  const orders = await mapOrderRows();
+  return orders.filter(
+    o =>
+      o.userId === userId &&
+      o.status === "pending"
+  );
+}
+
+/* =========================
+   出貨用（管理端）
+========================= */
+
+export async function getShippingList() {
+  const orders = await mapOrderRows();
+  return orders.filter(o => o.status === "pending");
+}
+
+export async function markOrdersShipped(orderIds) {
+  const rows = await readSheet(ORDER_SHEET);
+  const headers = rows[0];
+  const statusCol = headers.indexOf("status");
+
+  const shipped = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const orderId = `${row[0]}_${row[1]}`; // userId_productCode
+    if (orderIds.includes(orderId)) {
+      const colLetter = String.fromCharCode(65 + statusCol);
+      await writeCell(ORDER_SHEET, `${colLetter}${i + 1}`, "shipped");
+
+      shipped.push({
+        userId: row[0],
+        productName: row[2],
+        qty: row[3],
+        price: row[4],
+        subtotal: row[5]
+      });
+    }
+  }
+
+  return shipped;
+}

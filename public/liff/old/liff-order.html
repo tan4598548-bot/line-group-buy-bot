@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>團購下單</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 16px; }
+    select, input, button { width: 100%; margin: 8px 0; padding: 8px; }
+  </style>
+</head>
+<body>
+
+<h2>🛒 團購下單</h2>
+
+<select id="product"></select>
+<select id="color"></select>
+<select id="size">
+  <option value="S">S</option>
+  <option value="M">M</option>
+  <option value="L">L</option>
+</select>
+<input type="number" id="qty" placeholder="數量" min="1" />
+<button onclick="submitOrder()">送出下單</button>
+
+<script>
+const API = "https://你的-render-網址.onrender.com";
+
+let products = [];
+let userId = "";
+
+async function init() {
+  await liff.init({ liffId: "你的LIFF_ID" });
+  userId = liff.getDecodedIDToken().sub;
+
+  const res = await fetch(`${API}/api/products`);
+  products = await res.json();
+
+  const select = document.getElementById("product");
+  products
+    .filter(p => p.active === "TRUE")
+    .forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.productCode;
+      opt.textContent = `${p.productName} ($${p.price})`;
+      select.appendChild(opt);
+    });
+
+  select.onchange = loadColors;
+  loadColors();
+}
+
+function loadColors() {
+  const code = document.getElementById("product").value;
+  const p = products.find(x => x.productCode === code);
+  const colorSelect = document.getElementById("color");
+  colorSelect.innerHTML = "";
+
+  p.colorMap.split(",").forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c.split(":")[0];
+    opt.textContent = `(${c.split(":")[0]}) ${c.split(":")[1]}`;
+    colorSelect.appendChild(opt);
+  });
+}
+
+async function submitOrder() {
+  const body = {
+    userId,
+    productCode: product.value,
+    color: color.value,
+    size: size.value,
+    qty: qty.value
+  };
+
+  await fetch(`${API}/api/order`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  alert("✅ 下單完成");
+  liff.closeWindow();
+}
+
+init();
+</script>
+</body>
+</html>

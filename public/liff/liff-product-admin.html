@@ -2,138 +2,68 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>商品管理（版主）</title>
+  <title>商品管理</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont;
-      background: #f7f7f7;
-      padding: 12px;
-    }
-    h2 {
-      margin-bottom: 8px;
-    }
+    body { font-family: sans-serif; padding: 16px; }
     .product {
-      background: #fff;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 10px;
-      box-shadow: 0 2px 6px rgba(0,0,0,.08);
-    }
-    .row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 6px;
+      border-bottom: 1px solid #ddd;
+      padding: 10px 0;
     }
     button {
-      padding: 6px 10px;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-    }
-    .on { background: #2ecc71; color: #fff; }
-    .off { background: #aaa; color: #fff; }
-    .close { background: #e74c3c; color: #fff; }
-    .badge {
-      font-size: 12px;
-      padding: 2px 6px;
-      border-radius: 4px;
-      background: #ddd;
+      margin-right: 6px;
     }
   </style>
 </head>
-
 <body>
-  <h2>📦 商品管理</h2>
-  <div id="list">載入中…</div>
+  <h2>🛠 商品管理</h2>
+  <div id="list">讀取中...</div>
 
 <script>
-const API_BASE = "https://line-group-buy-bot-api.onrender.com"; 
-// ⬆️ 若你 Render 網址不同，改這裡即可
+async function main() {
+  await liff.init({ liffId: "YOUR_LIFF_ID" });
 
-/* =========================
-   LIFF 初始化
-========================= */
+  if (!liff.isLoggedIn()) {
+    liff.login();
+    return;
+  }
 
-async function init() {
-  await liff.init({ liffId: "YOUR_LIFF_ID" }); // ← 換成你的
-  loadProducts();
-}
-
-/* =========================
-   載入商品
-========================= */
-
-async function loadProducts() {
-  const res = await fetch(`${API_BASE}/api/products`);
+  const res = await fetch("/api/products");
   const products = await res.json();
 
   const el = document.getElementById("list");
-  el.innerHTML = "";
-
-  products.forEach(p => {
-    const div = document.createElement("div");
-    div.className = "product";
-
-    const statusText = p.closed === "TRUE"
-      ? "🔒 已結單"
-      : (p.active === "TRUE" ? "🟢 上架中" : "⚪ 未上架");
-
-    div.innerHTML = `
-      <strong>${p.productName}</strong>
-      <div class="row">
-        <span class="badge">${statusText}</span>
-      </div>
-      <div class="row">
-        <button class="${p.active === "TRUE" ? "off" : "on"}"
-          onclick="toggle('${p.productCode}', ${p.active !== "TRUE"})">
-          ${p.active === "TRUE" ? "下架" : "上架"}
-        </button>
-
-        <button class="close"
-          onclick="closeProduct('${p.productCode}')"
-          ${p.closed === "TRUE" ? "disabled" : ""}>
-          結單
-        </button>
-      </div>
-    `;
-
-    el.appendChild(div);
-  });
+  el.innerHTML = products.map(p => `
+    <div class="product">
+      <b>${p.name}</b><br/>
+      狀態：${p.active ? "上架中" : "已下架"}<br/>
+      <button onclick="setActive('${p.code}', ${!p.active})">
+        ${p.active ? "下架" : "上架"}
+      </button>
+      <button onclick="closeProduct('${p.code}')">結單</button>
+    </div>
+  `).join("");
 }
 
-/* =========================
-   上下架
-========================= */
-
-async function toggle(code, active) {
-  await fetch(`${API_BASE}/api/product/active`, {
+async function setActive(code, active) {
+  await fetch("/api/product/active", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ productCode: code, active })
   });
-  loadProducts();
+  location.reload();
 }
 
-/* =========================
-   結單（自動斷貨）
-========================= */
-
 async function closeProduct(code) {
-  if (!confirm("確定要結單？結單後買家將無法下單")) return;
-
-  await fetch(`${API_BASE}/api/product/close`, {
+  if (!confirm("確定結單？")) return;
+  await fetch("/api/product/close", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ productCode: code })
   });
-
-  alert("已結單，買家無法再下單");
-  loadProducts();
+  location.reload();
 }
 
-init();
+main();
 </script>
 </body>
 </html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>團購管理中心</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f6f8;
+      margin: 0;
+      padding: 16px;
+    }
+    h2 {
+      margin: 4px 0 16px;
+      text-align: center;
+    }
+    .menu {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      max-width: 420px;
+      margin: auto;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      cursor: pointer;
+      transition: transform .05s ease;
+    }
+    .card:active {
+      transform: scale(0.98);
+    }
+    .title {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .desc {
+      font-size: 13px;
+      color: #666;
+      margin-top: 4px;
+    }
+    .footer {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+
+<h2>🛠 團購管理中心</h2>
+
+<div class="menu">
+
+  <div class="card" onclick="go('/liff-product-admin.html')">
+    <div class="title">📦 商品管理</div>
+    <div class="desc">上下架、結單、狀態控制</div>
+  </div>
+
+  <div class="card" onclick="go('/liff/vendor-arrival.html')">
+    <div class="title">📥 到貨勾選</div>
+    <div class="desc">廠商到貨、清點確認</div>
+  </div>
+
+  <div class="card" onclick="go('/liff-shipping.html')">
+    <div class="title">🚚 出貨管理</div>
+    <div class="desc">勾選出貨、產生買家 PDF</div>
+  </div>
+
+  <div class="card" onclick="go('/liff-buyer-orders.html')">
+    <div class="title">👥 買家訂單查詢</div>
+    <div class="desc">查詢任一買家下單狀況</div>
+  </div>
+
+</div>
+
+<div class="footer">
+  團購系統管理介面
+</div>
+
+<script>
+async function init() {
+  await liff.init({ liffId: "2008857998-aQzlAAST" });
+
+  if (!liff.isLoggedIn()) {
+    liff.login();
+    return;
+  }
+}
+
+function go(path) {
+  location.href = path;
+}
+
+init();
+</script>
+
+</body>
+</html>

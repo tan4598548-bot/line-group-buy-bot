@@ -1,53 +1,108 @@
-import * as sheetService from './sheetService.js';
+import { 
+  getProducts,
+  appendOrder,
+  getOrdersByUserAndProduct
+} from "./sheetService.js";
 
-export async function handleOrder(text, event) {
-  const userId = event.source.userId;
+/**
+ * 買家下單主流程（含完整防呆）
+ */
+export async function handleOrder(req, res) {
+  try {
+    const { userId, productCode, qty } = req.body;
 
-  // 解析訊息內容，例如：+P001 紅色 L 2
-  const parts = text.replace('+', '').trim().split(' ');
-  const [productCode, colorCode, size, qtyStr] = parts;
-  const qty = Number(qtyStr || 1);
+    /* =====================
+       G-0 基本欄位檢查
+    ===================== */
+    if (!userId || !productCode || qty === undefined) {
+      throw new Error("缺少必要欄位");
+    }
 
-  // 取得商品清單
-  const products = await sheetService.getProducts();
-  const product = products.find(p => p.productCode === productCode);
+    /* =====================
+       G-3 防亂填數量
+    ===================== */
+    if (!Number.isInteger(qty) || qty <= 0) {
+      throw new Error("數量必須為正整數");
+    }
 
-  if (!product) {
-    return { type: 'text', text: '❌ 找不到此商品代號' };
+    /* =====================
+       取得商品資料（唯一真相）
+    ===================== */
+    const products = await getProducts();
+    const product = products.find(p => p.code === productCode);
+
+    if (!product) {
+      throw new Error("商品不存在");
+    }
+
+    /* =====================
+       G-2 防結單後偷下
+    ===================== */
+    if (product.closed === true) {
+      throw new Error("此商品已結單，無法下單");
+    }
+
+    /* =====================
+       G-4 防下架仍可下單
+    ===================== */
+    if (product.active !== true) {
+      throw new Error("此商品目前未開放下單");
+    }
+
+    /* =====================
+       G-1 防重複下單
+       同 user + product + pending
+    ===================== */
+    const existingOrders = await getOrdersByUserAndProduct(
+      userId,
+      productCode
+    );
+
+    const hasPending = existingOrders.some(
+      o => o.status === "pending"
+    );
+
+    if (hasPending) {
+      throw new Error("你已經下過此商品，請勿重複下單");
+    }
+
+    /* =====================
+       G-5 價格鎖定（超重要）
+    ===================== */
+    const price = Number(product.price);
+    if (!price || price <= 0) {
+      throw new Error("商品價格異常，請聯絡管理員");
+    }
+
+    const subtotal = price * qty;
+
+    /* =====================
+       建立訂單（寫死價格）
+    ===================== */
+    const order = {
+      userId,
+      productCode,
+      productName: product.name,
+      qty,
+      price,           // 🔒 下單當下價格
+      subtotal,
+      status: "pending",
+      locked: false,
+      createdAt: new Date().toISOString()
+    };
+
+    await appendOrder(order);
+
+    res.json({
+      ok: true,
+      message: "下單成功",
+      order
+    });
+
+  } catch (error) {
+    res.status(400).json({
+      ok: false,
+      error: error.message
+    });
   }
-
-  // 檢查商品狀態 (對應 Sheet 中的 active 欄位)
-  if (product.active === 'FALSE' || product.closed === 'TRUE') {
-    return { type: 'text', text: '⚠️ 此商品已鎖單 / 停售，無法下單' };
-  }
-
-  // 顏色名稱轉換
-  const colorMap = product.colorMap || '';
-  let colorName = colorCode;
-  colorMap.split(',').forEach(c => {
-    const [code, name] = c.split(':');
-    if (code === colorCode) colorName = name;
-  });
-
-  // 寫入訂單 (對應 Sheet 中的 Orders 分頁)
-  // 請確保 Orders 分頁第一列標題包含這些關鍵字
-  await sheetService.appendRow('Orders', {
-    userId: userId,
-    productCode: productCode,
-    colorCode: colorCode,
-    colorName: colorName,
-    size: size,
-    qty: qty,
-    orderDate: new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })
-  });
-
-  return {
-    type: 'text',
-    text: `✅ 下單成功\n商品：${product.productName}\n規格：${colorName} ${size} x${qty}`,
-  };
-}
-
-// 買家訂單查詢
-export async function getBuyerOrders(userId) {
-  return await sheetService.getBuyerOrders(userId);
 }

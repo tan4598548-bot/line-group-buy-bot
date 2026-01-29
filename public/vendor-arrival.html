@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>到貨勾選</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 12px }
+    .item { border-bottom: 1px solid #ccc; padding: 8px 0 }
+  </style>
+</head>
+<body>
+
+<h3>📦 廠商到貨勾選</h3>
+<div id="list"></div>
+
+<script>
+async function load() {
+  const res = await fetch('/api/vendorOrders');
+  const data = await res.json();
+  const el = document.getElementById('list');
+
+  data.forEach(d => {
+    const div = document.createElement('div');
+    div.className = 'item';
+    div.innerHTML = `
+      <b>${d.product}</b><br>
+      ${d.color} / ${d.size}<br>
+      未到：${d.pending}<br>
+      <input type="number" min="1" max="${d.pending}" id="q${d.id}">
+      <button onclick="arrive(${d.id})">到貨</button>
+    `;
+    el.appendChild(div);
+  });
+}
+
+async function arrive(id) {
+  const qty = document.getElementById('q' + id).value;
+  if (!qty) return;
+
+  await fetch('/api/arrive', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vendorRowId: id, qty })
+  });
+
+  alert('已記錄到貨');
+  location.reload();
+}
+
+load();
+</script>
+</body>
+</html>
