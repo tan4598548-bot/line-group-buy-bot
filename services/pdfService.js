@@ -1,95 +1,100 @@
 import PDFDocument from "pdfkit";
 import fs from "fs";
+import path from "path";
 
 /**
+ * 出貨清單 PDF
  * orders: [
  *   {
+ *     orderId,
  *     buyerName,
  *     productName,
  *     color,
  *     size,
- *     quantity,
- *     price
+ *     quantity
  *   }
  * ]
  */
-export function generateBuyerPackingPDF(buyerOrdersMap, outputPath) {
+export function generateShippingPdf(orders = []) {
+  if (!orders.length) {
+    throw new Error("無出貨資料可產生 PDF");
+  }
+
+  const outputDir = "public/pdf";
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  const filePath = path.join(
+    outputDir,
+    `shipping_list_${Date.now()}.pdf`
+  );
+
   const doc = new PDFDocument({
     size: "A4",
-    margin: 20
+    margin: 40
   });
 
-  doc.pipe(fs.createWriteStream(outputPath));
+  doc.pipe(fs.createWriteStream(filePath));
 
-  const pageWidth = doc.page.width - 40;
-  const pageHeight = doc.page.height - 40;
+  /* ===== 標題 ===== */
+  doc
+    .fontSize(18)
+    .text("📦 出貨清單", { align: "center" })
+    .moveDown(1);
 
-  const cols = 4;
-  const rows = 6;
+  doc
+    .fontSize(10)
+    .text(`產生時間：${new Date().toLocaleString()}`)
+    .moveDown(1.5);
 
-  const cellWidth = pageWidth / cols;
-  const cellHeight = pageHeight / rows;
+  /* ===== 表頭 ===== */
+  const startY = doc.y;
+  const colX = {
+    no: 40,
+    buyer: 70,
+    product: 150,
+    spec: 340,
+    qty: 470
+  };
 
-  let index = 0;
+  doc
+    .fontSize(10)
+    .text("序", colX.no, startY)
+    .text("買家", colX.buyer, startY)
+    .text("商品", colX.product, startY)
+    .text("規格", colX.spec, startY)
+    .text("數量", colX.qty, startY);
 
-  for (const [buyerName, orders] of Object.entries(buyerOrdersMap)) {
-    const col = index % cols;
-    const row = Math.floor(index / cols) % rows;
+  doc
+    .moveTo(40, startY + 15)
+    .lineTo(550, startY + 15)
+    .stroke();
 
-    if (index > 0 && index % (cols * rows) === 0) {
+  let y = startY + 25;
+
+  /* ===== 內容 ===== */
+  orders.forEach((o, i) => {
+    if (y > 760) {
       doc.addPage();
+      y = 60;
     }
-
-    const x = 20 + col * cellWidth;
-    const y = 20 + row * cellHeight;
-
-    doc
-      .rect(x, y, cellWidth - 5, cellHeight - 5)
-      .stroke();
-
-    let cursorY = y + 8;
 
     doc
       .fontSize(9)
-      .text(`買家：${buyerName}`, x + 6, cursorY);
+      .text(i + 1, colX.no, y)
+      .text(o.buyerName || "-", colX.buyer, y)
+      .text(o.productName || "-", colX.product, y)
+      .text(
+        `${o.color || ""} ${o.size || ""}`.trim(),
+        colX.spec,
+        y
+      )
+      .text(o.quantity || 0, colX.qty, y);
 
-    cursorY += 14;
-
-    let total = 0;
-
-    orders.forEach(o => {
-      const lineTotal = (o.price || 0) * o.quantity;
-      total += lineTotal;
-
-      doc
-        .fontSize(8)
-        .text(
-          `${o.productName}`,
-          x + 6,
-          cursorY
-        );
-
-      cursorY += 10;
-
-      doc
-        .fontSize(8)
-        .text(
-          `${o.color || ""} ${o.size || ""} x${o.quantity}  $${o.price || "--"}`,
-          x + 10,
-          cursorY
-        );
-
-      cursorY += 12;
-    });
-
-    cursorY += 6;
-
-    doc
-      .fontSize(8)
-      .text(`合計：$${total}`, x + 6, cursorY);
-
-    index++;
-  }
+    y += 18;
+  });
 
   doc.end();
+  return filePath;
 }
