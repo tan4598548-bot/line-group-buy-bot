@@ -90,21 +90,34 @@ export async function markProductClosed(productCode) {
   }
 }
 
+/* ⭐⭐⭐ 新增：抓「明天結單」商品 ⭐⭐⭐ */
+export async function getProductsClosingTomorrow() {
+  const products = await getProducts();
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const yyyy = tomorrow.getFullYear();
+  const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
+  const dd = String(tomorrow.getDate()).padStart(2, "0");
+
+  const target = `${yyyy}-${mm}-${dd}`;
+
+  return products.filter(p => p.closeDate === target);
+}
+
 /* =========================
-   Orders（欄位鎖死）
+   Orders
 ========================= */
-/*
-建議 Orders Sheet Header：
-userId | productCode | productName | qty | price | subtotal | status | locked | createdAt
-*/
 
 function mapOrderRows() {
   return readSheet(ORDER_SHEET).then(rows => {
     if (rows.length <= 1) return [];
     const headers = rows[0];
-    return rows.slice(1).map(row => {
+    return rows.slice(1).map((row, idx) => {
       const o = {};
       headers.forEach((h, i) => (o[h] = row[i] ?? ""));
+      o._rowNumber = idx + 2;
       return o;
     });
   });
@@ -136,17 +149,6 @@ export async function getBuyerOrders(userId) {
   return userId ? orders.filter(o => o.userId === userId) : orders;
 }
 
-export async function getOrdersByUserAndProduct(userId, productCode) {
-  const orders = await mapOrderRows();
-  return orders.filter(
-    o => o.userId === userId && o.productCode === productCode
-  );
-}
-
-/* =========================
-   只看「尚未出貨」
-========================= */
-
 export async function getBuyerPendingOrders(userId) {
   const orders = await mapOrderRows();
   return orders.filter(
@@ -156,8 +158,28 @@ export async function getBuyerPendingOrders(userId) {
   );
 }
 
+/* ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
+   👉 這支就是你缺的！！
+⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐ */
+export async function getBuyerPackingList() {
+  const orders = await mapOrderRows();
+
+  return orders
+    .filter(o => o.status === "pending")
+    .reduce((acc, o) => {
+      if (!acc[o.userId]) acc[o.userId] = [];
+
+      acc[o.userId].push({
+        productName: o.productName,
+        qty: o.qty
+      });
+
+      return acc;
+    }, {});
+}
+
 /* =========================
-   出貨用（管理端）
+   出貨
 ========================= */
 
 export async function getShippingList() {
@@ -174,7 +196,8 @@ export async function markOrdersShipped(orderIds) {
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    const orderId = `${row[0]}_${row[1]}`; // userId_productCode
+    const orderId = `${row[0]}_${row[1]}`;
+
     if (orderIds.includes(orderId)) {
       const colLetter = String.fromCharCode(65 + statusCol);
       await writeCell(ORDER_SHEET, `${colLetter}${i + 1}`, "shipped");
