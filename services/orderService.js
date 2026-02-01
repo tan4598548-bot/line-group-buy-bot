@@ -1,4 +1,4 @@
-import { 
+import {
   getProducts,
   appendOrder,
   getOrdersByUserAndProduct
@@ -6,6 +6,7 @@ import {
 
 /**
  * 買家下單主流程（含完整防呆）
+ * ⚠️ index.js 直接呼叫 handleOrder(req, res)
  */
 export async function handleOrder(req, res) {
   try {
@@ -29,7 +30,7 @@ export async function handleOrder(req, res) {
        取得商品資料（唯一真相）
     ===================== */
     const products = await getProducts();
-    const product = products.find(p => p.code === productCode);
+    const product = products.find(p => p.productCode === productCode);
 
     if (!product) {
       throw new Error("商品不存在");
@@ -38,14 +39,14 @@ export async function handleOrder(req, res) {
     /* =====================
        G-2 防結單後偷下
     ===================== */
-    if (product.closed === true) {
+    if (product.closed === "TRUE" || product.closed === true) {
       throw new Error("此商品已結單，無法下單");
     }
 
     /* =====================
        G-4 防下架仍可下單
     ===================== */
-    if (product.active !== true) {
+    if (product.active !== "TRUE" && product.active !== true) {
       throw new Error("此商品目前未開放下單");
     }
 
@@ -82,7 +83,7 @@ export async function handleOrder(req, res) {
     const order = {
       userId,
       productCode,
-      productName: product.name,
+      productName: product.productName || product.name || "",
       qty,
       price,           // 🔒 下單當下價格
       subtotal,
