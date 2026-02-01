@@ -62,7 +62,11 @@ export async function updateProductStatus(productCode, active) {
   const col = headers.indexOf("active");
   const colLetter = String.fromCharCode(65 + col);
 
-  await writeCell(PRODUCT_SHEET, `${colLetter}${p._rowNumber}`, active ? "TRUE" : "FALSE");
+  await writeCell(
+    PRODUCT_SHEET,
+    `${colLetter}${p._rowNumber}`,
+    active ? "TRUE" : "FALSE"
+  );
 }
 
 export async function markProductClosed(productCode) {
@@ -83,6 +87,24 @@ export async function markProductClosed(productCode) {
       );
     }
   }
+}
+
+/* =========================
+   🆕 結單前一天提醒用
+========================= */
+
+export async function getProductsClosingTomorrow() {
+  const products = await getProducts();
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const yyyyMMdd = tomorrow.toISOString().slice(0, 10);
+
+  // 預期 Products Sheet 有 closeDate 欄位 (YYYY-MM-DD)
+  return products.filter(p =>
+    p.closeDate === yyyyMMdd &&
+    p.closed !== true
+  );
 }
 
 /* =========================
@@ -136,7 +158,9 @@ export async function getOrdersByUserAndProduct(userId, productCode) {
 
 export async function getBuyerPendingOrders(userId) {
   const orders = await mapOrderRows();
-  return orders.filter(o => o.userId === userId && o.status === "pending");
+  return orders.filter(
+    o => o.userId === userId && o.status === "pending"
+  );
 }
 
 /* =========================
@@ -177,22 +201,16 @@ export async function markOrdersShipped(orderIds) {
 }
 
 /* =========================
-   🆕 買家揀貨 PDF 用資料
+   買家揀貨 PDF
 ========================= */
 
 export async function getBuyerPackingList() {
   const orders = await mapOrderRows();
-
-  // 只抓已出貨
   const shipped = orders.filter(o => o.status === "shipped");
 
   const map = {};
-
   for (const o of shipped) {
-    if (!map[o.userId]) {
-      map[o.userId] = [];
-    }
-
+    if (!map[o.userId]) map[o.userId] = [];
     map[o.userId].push({
       productName: o.productName,
       quantity: Number(o.qty),
