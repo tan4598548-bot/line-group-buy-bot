@@ -67,7 +67,11 @@ export async function updateProductStatus(productCode, active) {
   if (col === -1) throw new Error("缺少 active 欄位");
 
   const colLetter = String.fromCharCode(65 + col);
-  await writeCell(PRODUCT_SHEET, `${colLetter}${p._rowNumber}`, active ? "TRUE" : "FALSE");
+  await writeCell(
+    PRODUCT_SHEET,
+    `${colLetter}${p._rowNumber}`,
+    active ? "TRUE" : "FALSE"
+  );
 }
 
 export async function markProductClosed(productCode) {
@@ -90,36 +94,22 @@ export async function markProductClosed(productCode) {
   }
 }
 
-/* ⭐⭐⭐ 新增：抓「明天結單」商品 ⭐⭐⭐ */
-export async function getProductsClosingTomorrow() {
-  const products = await getProducts();
-
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const yyyy = tomorrow.getFullYear();
-  const mm = String(tomorrow.getMonth() + 1).padStart(2, "0");
-  const dd = String(tomorrow.getDate()).padStart(2, "0");
-
-  const target = `${yyyy}-${mm}-${dd}`;
-
-  return products.filter(p => p.closeDate === target);
-}
-
 /* =========================
-   Orders
+   Orders（核心）
 ========================= */
 
-function mapOrderRows() {
-  return readSheet(ORDER_SHEET).then(rows => {
-    if (rows.length <= 1) return [];
-    const headers = rows[0];
-    return rows.slice(1).map((row, idx) => {
-      const o = {};
-      headers.forEach((h, i) => (o[h] = row[i] ?? ""));
-      o._rowNumber = idx + 2;
-      return o;
+async function mapOrderRows() {
+  const rows = await readSheet(ORDER_SHEET);
+  if (rows.length <= 1) return [];
+
+  const headers = rows[0];
+
+  return rows.slice(1).map(row => {
+    const o = {};
+    headers.forEach((h, i) => {
+      o[h] = row[i] ?? "";
     });
+    return o;
   });
 }
 
@@ -149,37 +139,27 @@ export async function getBuyerOrders(userId) {
   return userId ? orders.filter(o => o.userId === userId) : orders;
 }
 
-export async function getBuyerPendingOrders(userId) {
+/* 🔥🔥🔥 關鍵缺失 export（造成你一直炸的元兇） */
+export async function getOrdersByUserAndProduct(userId, productCode) {
   const orders = await mapOrderRows();
   return orders.filter(
-    o =>
-      o.userId === userId &&
-      o.status === "pending"
+    o => o.userId === userId && o.productCode === productCode
   );
 }
 
-/* ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
-   👉 這支就是你缺的！！
-⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐ */
-export async function getBuyerPackingList() {
+/* =========================
+   Buyer：尚未出貨
+========================= */
+
+export async function getBuyerPendingOrders(userId) {
   const orders = await mapOrderRows();
-
-  return orders
-    .filter(o => o.status === "pending")
-    .reduce((acc, o) => {
-      if (!acc[o.userId]) acc[o.userId] = [];
-
-      acc[o.userId].push({
-        productName: o.productName,
-        qty: o.qty
-      });
-
-      return acc;
-    }, {});
+  return orders.filter(
+    o => o.userId === userId && o.status === "pending"
+  );
 }
 
 /* =========================
-   出貨
+   Admin：出貨
 ========================= */
 
 export async function getShippingList() {
