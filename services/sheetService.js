@@ -12,7 +12,6 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: "v4", auth });
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
-/* Sheet 名稱 */
 const PRODUCT_SHEET = "Products";
 const ORDER_SHEET = "Orders";
 
@@ -46,12 +45,9 @@ export async function getProducts() {
   if (rows.length <= 1) return [];
 
   const headers = rows[0];
-
   return rows.slice(1).map((row, idx) => {
     const obj = {};
-    headers.forEach((h, i) => {
-      obj[h] = row[i] ?? "";
-    });
+    headers.forEach((h, i) => (obj[h] = row[i] ?? ""));
     obj._rowNumber = idx + 2;
     return obj;
   });
@@ -64,14 +60,9 @@ export async function updateProductStatus(productCode, active) {
 
   const headers = Object.keys(p).filter(k => !k.startsWith("_"));
   const col = headers.indexOf("active");
-  if (col === -1) throw new Error("缺少 active 欄位");
-
   const colLetter = String.fromCharCode(65 + col);
-  await writeCell(
-    PRODUCT_SHEET,
-    `${colLetter}${p._rowNumber}`,
-    active ? "TRUE" : "FALSE"
-  );
+
+  await writeCell(PRODUCT_SHEET, `${colLetter}${p._rowNumber}`, active ? "TRUE" : "FALSE");
 }
 
 export async function markProductClosed(productCode) {
@@ -95,7 +86,7 @@ export async function markProductClosed(productCode) {
 }
 
 /* =========================
-   Orders（核心）
+   Orders
 ========================= */
 
 async function mapOrderRows() {
@@ -103,12 +94,9 @@ async function mapOrderRows() {
   if (rows.length <= 1) return [];
 
   const headers = rows[0];
-
   return rows.slice(1).map(row => {
     const o = {};
-    headers.forEach((h, i) => {
-      o[h] = row[i] ?? "";
-    });
+    headers.forEach((h, i) => (o[h] = row[i] ?? ""));
     return o;
   });
 }
@@ -139,7 +127,6 @@ export async function getBuyerOrders(userId) {
   return userId ? orders.filter(o => o.userId === userId) : orders;
 }
 
-/* 🔥🔥🔥 關鍵缺失 export（造成你一直炸的元兇） */
 export async function getOrdersByUserAndProduct(userId, productCode) {
   const orders = await mapOrderRows();
   return orders.filter(
@@ -147,19 +134,13 @@ export async function getOrdersByUserAndProduct(userId, productCode) {
   );
 }
 
-/* =========================
-   Buyer：尚未出貨
-========================= */
-
 export async function getBuyerPendingOrders(userId) {
   const orders = await mapOrderRows();
-  return orders.filter(
-    o => o.userId === userId && o.status === "pending"
-  );
+  return orders.filter(o => o.userId === userId && o.status === "pending");
 }
 
 /* =========================
-   Admin：出貨
+   出貨
 ========================= */
 
 export async function getShippingList() {
@@ -193,4 +174,31 @@ export async function markOrdersShipped(orderIds) {
   }
 
   return shipped;
+}
+
+/* =========================
+   🆕 買家揀貨 PDF 用資料
+========================= */
+
+export async function getBuyerPackingList() {
+  const orders = await mapOrderRows();
+
+  // 只抓已出貨
+  const shipped = orders.filter(o => o.status === "shipped");
+
+  const map = {};
+
+  for (const o of shipped) {
+    if (!map[o.userId]) {
+      map[o.userId] = [];
+    }
+
+    map[o.userId].push({
+      productName: o.productName,
+      quantity: Number(o.qty),
+      price: Number(o.price)
+    });
+  }
+
+  return map;
 }
