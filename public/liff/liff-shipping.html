@@ -2,30 +2,26 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>出貨管理（LIFF）</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>出貨管理</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; background:#f7f7f7; margin:0; padding:12px; }
-    h2 { margin: 4px 0 12px; }
-    .card { background:#fff; border-radius:8px; padding:12px; margin-bottom:10px; }
-    .row { display:flex; justify-content:space-between; align-items:center; }
-    button {
-      padding:6px 12px; border:0; border-radius:6px;
-      background:#06c755; color:#fff; cursor:pointer;
-    }
-    button.secondary { background:#888; }
-    .muted { color:#666; font-size:13px; }
+    body { font-family: sans-serif; background:#f7f7f7; padding:12px; }
+    h2 { margin-bottom:10px; }
+    .card { background:#fff; padding:10px; border-radius:8px; margin-bottom:8px; }
+    button { padding:8px 12px; border-radius:6px; border:0; background:#06c755; color:#fff; }
+    button.secondary { background:#555; }
   </style>
 </head>
 <body>
-  <h2>🚚 出貨勾選</h2>
 
-  <div id="list"></div>
+<h2>🚚 出貨管理</h2>
 
-  <div style="margin-top:12px;">
-    <button onclick="markShipped()">✅ 標記已出貨 + 產 PDF</button>
-  </div>
+<div id="list"></div>
+
+<button onclick="markShipped()">✅ 標記出貨＋出貨單 PDF</button>
+<br><br>
+<button class="secondary" onclick="genPackingPdf()">🧾 產生買家揀貨 PDF</button>
 
 <script>
 let orders = [];
@@ -44,27 +40,18 @@ function render() {
     const div = document.createElement("div");
     div.className = "card";
     div.innerHTML = `
-      <div class="row">
-        <label>
-          <input type="checkbox" data-id="${o.orderId}">
-          <b>${o.productName}</b>
-        </label>
-        <span>${o.color} × ${o.qty}</span>
-      </div>
-      <div class="muted">${o.buyerName}</div>
+      <label>
+        <input type="checkbox" value="${o.userId}_${o.productCode}">
+        ${o.productName} × ${o.qty}
+      </label>
     `;
     el.appendChild(div);
   });
 }
 
 async function markShipped() {
-  const ids = [...document.querySelectorAll("input[type=checkbox]:checked")]
-    .map(i => i.dataset.id);
-
-  if (!ids.length) {
-    alert("請先勾選出貨項目");
-    return;
-  }
+  const ids = [...document.querySelectorAll("input:checked")].map(i => i.value);
+  if (!ids.length) return alert("請先勾選");
 
   const res = await fetch("/api/admin/ship", {
     method: "POST",
@@ -73,9 +60,15 @@ async function markShipped() {
   });
 
   const data = await res.json();
-  alert("已完成出貨，PDF 已產生");
   window.open(data.pdfUrl);
   location.reload();
+}
+
+async function genPackingPdf() {
+  const res = await fetch("/api/admin/buyer-packing-pdf");
+  const data = await res.json();
+  if (!data.pdfUrl) return alert(data.error || "失敗");
+  window.open(data.pdfUrl);
 }
 
 init();

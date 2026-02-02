@@ -2,102 +2,115 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>團購管理中心</title>
+  <title>Phonmain 管理後台</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- LIFF SDK -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f5f6f8;
       margin: 0;
-      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   "PingFang TC", "Noto Sans TC", sans-serif;
+      background: #f5f5f5;
     }
-    h2 {
-      margin: 4px 0 16px;
+
+    header {
+      background: #111;
+      color: #fff;
+      padding: 16px;
       text-align: center;
+      font-size: 18px;
+      font-weight: bold;
     }
-    .menu {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 12px;
-      max-width: 420px;
-      margin: auto;
-    }
-    .card {
-      background: #fff;
-      border-radius: 12px;
+
+    .container {
       padding: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-      cursor: pointer;
-      transition: transform .05s ease;
     }
-    .card:active {
+
+    .menu-btn {
+      width: 100%;
+      padding: 18px;
+      margin-bottom: 12px;
+      font-size: 16px;
+      border-radius: 10px;
+      border: none;
+      background: #fff;
+      text-align: left;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      cursor: pointer;
+    }
+
+    .menu-btn span {
+      font-size: 20px;
+      margin-right: 10px;
+    }
+
+    .menu-btn:active {
       transform: scale(0.98);
     }
-    .title {
-      font-size: 16px;
-      font-weight: 600;
-    }
-    .desc {
-      font-size: 13px;
-      color: #666;
-      margin-top: 4px;
-    }
-    .footer {
-      margin-top: 20px;
+
+    footer {
       text-align: center;
       font-size: 12px;
       color: #999;
+      margin-top: 24px;
     }
   </style>
 </head>
+
 <body>
 
-<h2>🛠 團購管理中心</h2>
+<header>
+  🧾 Phonmain 管理後台
+</header>
 
-<div class="menu">
+<div class="container">
 
-  <div class="card" onclick="go('/liff-product-admin.html')">
-    <div class="title">📦 商品管理</div>
-    <div class="desc">上下架、結單、狀態控制</div>
-  </div>
+  <button class="menu-btn" onclick="go('liff-product-admin.html')">
+    <span>📦</span> 商品管理（上架 / 結單）
+  </button>
 
-  <div class="card" onclick="go('/liff/vendor-arrival.html')">
-    <div class="title">📥 到貨勾選</div>
-    <div class="desc">廠商到貨、清點確認</div>
-  </div>
+  <button class="menu-btn" onclick="go('liff-shipping.html')">
+    <span>🚚</span> 出貨 / 點貨
+  </button>
 
-  <div class="card" onclick="go('/liff-shipping.html')">
-    <div class="title">🚚 出貨管理</div>
-    <div class="desc">勾選出貨、產生買家 PDF</div>
-  </div>
+  <button class="menu-btn" onclick="go('vendor-arrival.html')">
+    <span>🧮</span> 廠商 / 成本管理
+  </button>
 
-  <div class="card" onclick="go('/liff-buyer-orders.html')">
-    <div class="title">👥 買家訂單查詢</div>
-    <div class="desc">查詢任一買家下單狀況</div>
-  </div>
+  <button class="menu-btn" onclick="go('liff-buyer-orders.html')">
+    <span>🔍</span> 查詢 / 修正訂單
+  </button>
+
+  <button class="menu-btn" onclick="lockNotice()">
+    <span>🔒</span> 鎖單 / 防誤觸
+  </button>
 
 </div>
 
-<div class="footer">
-  團購系統管理介面
-</div>
+<footer>
+  Phonmain Admin LIFF
+</footer>
 
 <script>
-async function init() {
-  await liff.init({ liffId: "2008857998-aQzlAAST" });
-
-  if (!liff.isLoggedIn()) {
-    liff.login();
-    return;
+  async function initLiff() {
+    await liff.init({ liffId: "YOUR_LIFF_ID_ADMIN" });
+    if (!liff.isLoggedIn()) {
+      liff.login();
+    }
   }
-}
 
-function go(path) {
-  location.href = path;
-}
+  function go(page) {
+    location.href = page;
+  }
 
-init();
+  function lockNotice() {
+    alert("⚠️ 鎖單功能將於下一步實作");
+  }
+
+  initLiff();
 </script>
 
 </body>

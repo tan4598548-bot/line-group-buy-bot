@@ -1,6 +1,10 @@
 import express from "express";
 import fs from "fs";
 import path from "path";
+import adminRoutes from "./routes/adminRoutes.js";
+
+// 管理員 API
+app.use("/api/admin", adminRoutes);
 
 import {
   getProducts,

@@ -66,6 +66,14 @@ export async function handleOrder(req, res) {
     if (hasPending) {
       throw new Error("你已經下過此商品，請勿重複下單");
     }
+    const hasLocked = existingOrders.some(
+  o => o.locked === "TRUE"
+);
+
+if (hasLocked) {
+  throw new Error("此商品訂單已鎖定，無法再下單");
+}
+
 
     /* =====================
        G-5 價格鎖定（超重要）

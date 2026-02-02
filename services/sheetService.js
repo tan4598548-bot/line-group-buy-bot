@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 
 /* =========================
-   Google Sheet 基本設定
+   Google Sheet 設定
 ========================= */
 
 const auth = new google.auth.GoogleAuth({
@@ -16,7 +16,7 @@ const PRODUCT_SHEET = "Products";
 const ORDER_SHEET = "Orders";
 
 /* =========================
-   共用工具
+   共用
 ========================= */
 
 async function readSheet(sheetName) {
@@ -27,10 +27,10 @@ async function readSheet(sheetName) {
   return res.data.values || [];
 }
 
-async function writeCell(sheetName, cell, value) {
+async function writeCell(sheet, cell, value) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!${cell}`,
+    range: `${sheet}!${cell}`,
     valueInputOption: "RAW",
     requestBody: { values: [[value]] },
   });
@@ -44,179 +44,66 @@ export async function getProducts() {
   const rows = await readSheet(PRODUCT_SHEET);
   if (rows.length <= 1) return [];
 
-  const headers = rows[0];
-  return rows.slice(1).map((row, idx) => {
-    const obj = {};
-    headers.forEach((h, i) => (obj[h] = row[i] ?? ""));
-    obj._rowNumber = idx + 2;
-    return obj;
-  });
+  return rows.slice(1).map((r, i) => ({
+    productCode: r[0],
+    productName: r[1],
+    colorMap: r[2],
+    price: Number(r[3]),
+    active: r[4] === "TRUE",
+    closeDate: r[5],
+    reminded: r[6] === "TRUE",
+    _row: i + 2,
+  }));
 }
-
-export async function updateProductStatus(productCode, active) {
-  const products = await getProducts();
-  const p = products.find(p => p.productCode === productCode);
-  if (!p) throw new Error("商品不存在");
-
-  const headers = Object.keys(p).filter(k => !k.startsWith("_"));
-  const col = headers.indexOf("active");
-  const colLetter = String.fromCharCode(65 + col);
-
-  await writeCell(
-    PRODUCT_SHEET,
-    `${colLetter}${p._rowNumber}`,
-    active ? "TRUE" : "FALSE"
-  );
-}
-
-export async function markProductClosed(productCode) {
-  const products = await getProducts();
-  const p = products.find(p => p.productCode === productCode);
-  if (!p) throw new Error("商品不存在");
-
-  const headers = Object.keys(p).filter(k => !k.startsWith("_"));
-
-  for (const field of ["closed", "active"]) {
-    const col = headers.indexOf(field);
-    if (col >= 0) {
-      const colLetter = String.fromCharCode(65 + col);
-      await writeCell(
-        PRODUCT_SHEET,
-        `${colLetter}${p._rowNumber}`,
-        field === "closed" ? "TRUE" : "FALSE"
-      );
-    }
-  }
-}
-
-/* =========================
-   🆕 結單前一天提醒用
-========================= */
 
 export async function getProductsClosingTomorrow() {
   const products = await getProducts();
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const target = d.toISOString().slice(0, 10);
 
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const yyyyMMdd = tomorrow.toISOString().slice(0, 10);
-
-  // 預期 Products Sheet 有 closeDate 欄位 (YYYY-MM-DD)
-  return products.filter(p =>
-    p.closeDate === yyyyMMdd &&
-    p.closed !== true
+  return products.filter(
+    p => p.closeDate === target && !p.reminded
   );
+}
+
+export async function markProductReminded(productCode) {
+  const products = await getProducts();
+  const p = products.find(p => p.productCode === productCode);
+  if (!p) return;
+  await writeCell(PRODUCT_SHEET, `G${p._row}`, "TRUE");
 }
 
 /* =========================
    Orders
 ========================= */
 
-async function mapOrderRows() {
+export async function getOrders() {
   const rows = await readSheet(ORDER_SHEET);
   if (rows.length <= 1) return [];
 
-  const headers = rows[0];
-  return rows.slice(1).map(row => {
-    const o = {};
-    headers.forEach((h, i) => (o[h] = row[i] ?? ""));
-    return o;
-  });
+  return rows.slice(1).map((r, i) => ({
+    lineUserId: r[0],
+    buyerName: r[1],
+    productCode: r[2],
+    productName: r[3],
+    color: r[4],
+    size: r[5],
+    qty: Number(r[6]),
+    price: Number(r[7]),
+    status: r[8],
+    note: r[9],
+    _row: i + 2,
+  }));
 }
 
-export async function appendOrder(order) {
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${ORDER_SHEET}!A1`,
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [[
-        order.userId,
-        order.productCode,
-        order.productName,
-        Number(order.qty),
-        Number(order.price),
-        Number(order.subtotal),
-        order.status,
-        order.locked ? "TRUE" : "FALSE",
-        order.createdAt
-      ]]
-    }
-  });
-}
-
-export async function getBuyerOrders(userId) {
-  const orders = await mapOrderRows();
-  return userId ? orders.filter(o => o.userId === userId) : orders;
-}
-
-export async function getOrdersByUserAndProduct(userId, productCode) {
-  const orders = await mapOrderRows();
-  return orders.filter(
-    o => o.userId === userId && o.productCode === productCode
-  );
-}
-
-export async function getBuyerPendingOrders(userId) {
-  const orders = await mapOrderRows();
-  return orders.filter(
-    o => o.userId === userId && o.status === "pending"
-  );
-}
-
-/* =========================
-   出貨
-========================= */
-
-export async function getShippingList() {
-  const orders = await mapOrderRows();
+export async function getPendingOrders() {
+  const orders = await getOrders();
   return orders.filter(o => o.status === "pending");
 }
 
-export async function markOrdersShipped(orderIds) {
-  const rows = await readSheet(ORDER_SHEET);
-  const headers = rows[0];
-  const statusCol = headers.indexOf("status");
-
-  const shipped = [];
-
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const orderId = `${row[0]}_${row[1]}`;
-
-    if (orderIds.includes(orderId)) {
-      const colLetter = String.fromCharCode(65 + statusCol);
-      await writeCell(ORDER_SHEET, `${colLetter}${i + 1}`, "shipped");
-
-      shipped.push({
-        userId: row[0],
-        productName: row[2],
-        qty: row[3],
-        price: row[4],
-        subtotal: row[5]
-      });
-    }
+export async function markOrdersShipped(rows) {
+  for (const r of rows) {
+    await writeCell(ORDER_SHEET, `I${r}`, "shipped");
   }
-
-  return shipped;
-}
-
-/* =========================
-   買家揀貨 PDF
-========================= */
-
-export async function getBuyerPackingList() {
-  const orders = await mapOrderRows();
-  const shipped = orders.filter(o => o.status === "shipped");
-
-  const map = {};
-  for (const o of shipped) {
-    if (!map[o.userId]) map[o.userId] = [];
-    map[o.userId].push({
-      productName: o.productName,
-      quantity: Number(o.qty),
-      price: Number(o.price)
-    });
-  }
-
-  return map;
 }
