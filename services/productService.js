@@ -1,5 +1,6 @@
 // services/productService.js
-import { getSheet } from './sheet.js';
+import * as sheetService from "./sheetService.js";
+
 
 const SHEET_NAME = 'Products';
 

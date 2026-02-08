@@ -1,31 +1,18 @@
-const vendorOrderService = require('./vendorOrderService');
+// services/lockService.js
+const locks = new Map();
 
-let locked = false;
-
-async function lock() {
-  if (locked) return;
-
-  locked = true;
-  console.log('🔒 鎖單完成，開始產生廠商訂貨表');
-
-  try {
-    await vendorOrderService.exportVendorOrders();
-    console.log('📄 廠商訂貨表已產生');
-  } catch (err) {
-    console.error('❌ 產生廠商訂貨表失敗', err);
-  }
+/**
+ * 嘗試取得鎖
+ */
+export function acquireLock(key) {
+  if (locks.get(key)) return false;
+  locks.set(key, true);
+  return true;
 }
 
-function unlock() {
-  locked = false;
+/**
+ * 釋放鎖
+ */
+export function releaseLock(key) {
+  locks.delete(key);
 }
-
-function isLocked() {
-  return locked;
-}
-
-module.exports = {
-  lock,
-  unlock,
-  isLocked
-};

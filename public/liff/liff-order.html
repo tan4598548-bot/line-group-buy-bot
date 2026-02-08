@@ -1,169 +1,74 @@
-import express from "express";
-import fetch from "node-fetch";
-import bodyParser from "body-parser";
-import { google } from "googleapis";
-import PDFDocument from "pdfkit";
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>商品下單</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+body { font-family: sans-serif; padding: 12px; }
+.card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.card h3 { margin: 0 0 6px; }
+.price { color: #d32f2f; font-weight: bold; }
+button {
+  margin-top: 8px;
+  width: 100%;
+  padding: 10px;
+}
+</style>
+</head>
 
-const app = express();
-app.use(bodyParser.json());
+<body>
+<h2>🛒 開團商品</h2>
+<div id="list">載入中…</div>
 
-/* ======================
-   基本設定
-====================== */
-const PORT = process.env.PORT || 3000;
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
-const ADMIN_LINE_IDS = (process.env.ADMIN_LINE_IDS || "").split(",");
+<script>
+async function init() {
+  await liff.init({ liffId: "2008857998-imqg5sNq" });
+  if (!liff.isLoggedIn()) {
+    liff.login();
+    return;
+  }
 
-/* ======================
-   Google Sheet Auth
-====================== */
-const auth = new google.auth.GoogleAuth({
-  scopes: ["https://www.googleapis.com/auth/spreadsheets"]
-});
-const sheets = google.sheets({ version: "v4", auth });
-
-/* ======================
-   工具函式
-====================== */
-function isAdmin(lineId) {
-  return ADMIN_LINE_IDS.includes(lineId);
+  loadProducts();
 }
 
-function today() {
-  return new Date().toISOString().slice(0, 10);
+async function loadProducts() {
+  const res = await fetch("/api/products");
+  const products = await res.json();
+
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  products
+    .filter(p => p.active === "TRUE")
+    .forEach(p => {
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <h3>${p.productName}</h3>
+        <div class="price">NT$ ${p.price}</div>
+        <button onclick="openDetail('${p.productCode}')">
+          查看商品 / 下單
+        </button>
+      `;
+      list.appendChild(div);
+    });
 }
 
-/* ======================
-   API：出貨清單（給 LIFF）
-====================== */
-app.get("/api/admin/shipping-list", async (req, res) => {
-  const lineId = req.headers["x-line-id"];
-  if (!isAdmin(lineId)) {
-    return res.status(403).json({ error: "無管理權限" });
-  }
-
-  const rows = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: "Orders!A2:J"
+function openDetail(productCode) {
+  liff.openWindow({
+    url: `https://你的網域/liff/liff-product-detail.html?productCode=${productCode}`,
+    external: false
   });
+}
 
-  const data = (rows.data.values || [])
-    .map((r, i) => ({
-      rowIndex: i + 2,
-      lineId: r[0],
-      buyerName: r[1],
-      productCode: r[2],
-      productName: r[3],
-      color: r[4],
-      size: r[5],
-      qty: Number(r[6] || 0),
-      price: Number(r[7] || 0),
-      status: r[8]
-    }))
-    .filter(o => o.status === "已到貨");
-
-  res.json(data);
-});
-
-/* ======================
-   API：標記出貨 + 產 PDF
-====================== */
-app.post("/api/admin/ship", async (req, res) => {
-  const { orderRowIndexes } = req.body;
-  const lineId = req.headers["x-line-id"];
-
-  if (!isAdmin(lineId)) {
-    return res.status(403).json({ error: "無管理權限" });
-  }
-
-  if (!Array.isArray(orderRowIndexes) || orderRowIndexes.length === 0) {
-    return res.status(400).json({ error: "未選擇出貨項目" });
-  }
-
-  /* 重新抓 Orders，防止重複出貨 */
-  const rowsRes = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: "Orders!A2:J"
-  });
-  const rows = rowsRes.data.values || [];
-
-  const shipItems = [];
-
-  for (const rowIndex of orderRowIndexes) {
-    const row = rows[rowIndex - 2];
-    if (!row) continue;
-
-    const status = row[8];
-    if (status !== "已到貨") {
-      return res.status(400).json({
-        error: `第 ${rowIndex} 列狀態不是「已到貨」，已中止`
-      });
-    }
-
-    shipItems.push({
-      buyerName: row[1],
-      productName: row[3],
-      color: row[4],
-      size: row[5],
-      qty: row[6],
-      price: row[7],
-      rowIndex
-    });
-  }
-
-  /* ======================
-     產 PDF
-  ====================== */
-  const pdf = new PDFDocument({ size: "A4", margin: 20 });
-  const buffers = [];
-  pdf.on("data", buffers.push.bind(buffers));
-  pdf.on("end", async () => {
-    const pdfBuffer = Buffer.concat(buffers);
-
-    /* 標記 Orders 為已出貨 */
-    const updates = shipItems.map(item => ({
-      range: `Orders!I${item.rowIndex}`,
-      values: [["已出貨"]]
-    }));
-
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
-      requestBody: {
-        valueInputOption: "RAW",
-        data: updates
-      }
-    });
-
-    /* 這裡你可以改成存 GCS / S3 */
-    res.json({
-      success: true,
-      pdfBase64: pdfBuffer.toString("base64")
-    });
-  });
-
-  /* PDF 內容（24 張 / 頁概念） */
-  shipItems.forEach((item, idx) => {
-    if (idx !== 0) pdf.addPage();
-
-    pdf
-      .fontSize(14)
-      .text(`👤 ${item.buyerName}`, { underline: true })
-      .moveDown(0.5)
-      .fontSize(12)
-      .text(item.productName)
-      .text(`${item.color} / ${item.size} × ${item.qty}`)
-      .moveDown(0.5)
-      .text(`小計：$${item.qty * item.price}`)
-      .moveDown(1)
-      .text("— 請於出貨時核對 —", { align: "center" });
-  });
-
-  pdf.end();
-});
-
-/* ======================
-   Server start
-====================== */
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-});
+init();
+</script>
+</body>
+</html>

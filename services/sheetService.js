@@ -107,3 +107,21 @@ export async function markOrdersShipped(rows) {
     await writeCell(ORDER_SHEET, `I${r}`, "shipped");
   }
 }
+export async function updateProductDetail(productCode, data) {
+  const products = await getProducts();
+  const p = products.find(p => p.productCode === productCode);
+  if (!p) throw new Error("商品不存在");
+
+  const headers = Object.keys(p).filter(k => !k.startsWith("_"));
+  for (const key of ["productDetail", "images", "video"]) {
+    if (headers.includes(key)) {
+      const col = headers.indexOf(key);
+      const colLetter = String.fromCharCode(65 + col);
+      await writeCell(
+        "Products",
+        `${colLetter}${p._rowNumber}`,
+        data[key] || ""
+      );
+    }
+  }
+}

@@ -1,11 +1,15 @@
 import express from "express";
-import fs from "fs";
 import path from "path";
+
+/* ===== Routes ===== */
 import adminRoutes from "./routes/adminRoutes.js";
+import adminArrivalRoutes from "./routes/adminArrival.js";
+import adminShippingRoutes from "./routes/adminShipping.js";
+import adminProductRoutes from "./routes/adminProduct.js";
+import overstockRoutes from "./routes/overstock.js";
+import buyerOrderRoutes from "./routes/buyerOrder.js";
 
-// 管理員 API
-app.use("/api/admin", adminRoutes);
-
+/* ===== Services ===== */
 import {
   getProducts,
   updateProductStatus,
@@ -22,10 +26,25 @@ import { handleOrder } from "./services/orderService.js";
 import { generateShippingPdf } from "./services/pdfService.js";
 import { generateBuyerPackingPdf } from "./services/buyerPackingPdfService.js";
 
+/* ===== App ===== */
 const app = express();
 
 app.use(express.json());
 app.use(express.static("public"));
+app.use("/api/buyer", buyerOrderRoutes);
+
+/* =====================
+   管理員 API
+===================== */
+app.use("/api/admin", adminRoutes);
+app.use("/api/admin", adminArrivalRoutes);
+app.use("/api/admin", adminShippingRoutes);
+app.use("/api/admin", adminProductRoutes);
+
+/* =====================
+   溢多商品（現貨出清）
+===================== */
+app.use("/api/overstock", overstockRoutes);
 
 /* =====================
    商品清單
@@ -70,6 +89,17 @@ app.post("/api/product/close", async (req, res) => {
 app.get("/api/buyer/orders", async (req, res) => {
   try {
     res.json(await getBuyerOrders(req.query.userId));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* =====================
+   買家：待出貨
+===================== */
+app.get("/api/buyer/pending", async (req, res) => {
+  try {
+    res.json(await getBuyerPendingOrders(req.query.userId));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -148,16 +178,8 @@ app.get("/api/admin/close-reminder", async (req, res) => {
 });
 
 /* =====================
-   買家：待出貨
+   Server
 ===================== */
-app.get("/api/buyer/pending", async (req, res) => {
-  try {
-    res.json(await getBuyerPendingOrders(req.query.userId));
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);

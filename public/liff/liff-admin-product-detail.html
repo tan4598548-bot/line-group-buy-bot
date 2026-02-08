@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>商品詳情</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+body { font-family: sans-serif; padding: 12px; }
+img { width: 100%; border-radius: 8px; margin-bottom: 8px; }
+select, button { width: 100%; padding: 10px; margin-top: 8px; }
+.section { margin-bottom: 16px; }
+.price { font-size: 20px; color: #d32f2f; font-weight: bold; }
+</style>
+</head>
+
+<body>
+<h2 id="name">商品</h2>
+<div class="price" id="price"></div>
+
+<div id="images"></div>
+
+<div id="youtube"></div>
+<div id="video"></div>
+
+<div class="section">
+  <pre id="detail"></pre>
+</div>
+
+<div class="section">
+  <label>尺寸</label>
+  <select id="size"></select>
+
+  <label>顏色</label>
+  <select id="color"></select>
+
+  <label>數量</label>
+  <select id="qty">
+    <option>1</option><option>2</option><option>3</option>
+    <option>4</option><option>5</option>
+  </select>
+</div>
+
+<button onclick="order()">🛒 立即下單</button>
+
+<script>
+let product = {};
+let userId = "";
+
+function qs(name) {
+  return new URLSearchParams(location.search).get(name);
+}
+let adminUserId = null; // 🔴 新增：全域儲存 admin userId
+
+async function init() {
+  await liff.init({ liffId: "2008857998-ZNTmhd33" });
+  if (!liff.isLoggedIn()) {
+    liff.login();
+    return;
+  adminUserId = liff.getContext().userId; // 🔴 新增  
+  }
+
+  userId = (await liff.getProfile()).userId;
+
+  const code = qs("productCode");
+  const res = await fetch(`/api/product-detail/${code}`);
+  product = await res.json();
+
+  render();
+}
+
+function render() {
+  document.getElementById("name").innerText = product.productName;
+  document.getElementById("price").innerText = `NT$ ${product.price}`;
+
+  document.getElementById("detail").innerText = product.detailText;
+
+  document.getElementById("images").innerHTML =
+    product.images.map(i => `<img src="${i}">`).join("");
+
+  if (product.youtube) {
+    document.getElementById("youtube").innerHTML =
+      `<iframe width="100%" height="200"
+        src="https://www.youtube.com/embed/${product.youtube.split("v=")[1]}"
+        frameborder="0" allowfullscreen></iframe>`;
+  }
+
+  if (product.video) {
+    document.getElementById("video").innerHTML =
+      `<video src="${product.video}" controls width="100%"></video>`;
+  }
+
+  product.sizes.forEach(s => {
+    size.innerHTML += `<option>${s}</option>`;
+  });
+  product.colors.forEach(c => {
+    color.innerHTML += `<option>${c}</option>`;
+  });
+}
+
+async function order() {
+  await fetch("/api/order", {
+    method: "POST",
+    headers: { "Content-Type": "application/json",
+    "x-line-userid": adminUserId // 🔴 新增：adminAuth 需要  
+     },
+    body: JSON.stringify({
+      userId,
+      productCode: product.productCode,
+      size: size.value,
+      color: color.value,
+      qty: qty.value
+    })
+  });
+
+  alert("已下單");
+  liff.closeWindow();
+}
+
+init();
+</script>
+</body>
+</html>
+

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>商品專區</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+.card { border:1px solid #ddd; margin:8px; padding:8px; }
+img { width:100%; }
+.hidden { display:none; }
+</style>
+</head>
+
+<body>
+
+<div id="listView">
+  <h2>📦 商品列表</h2>
+  <div id="list"></div>
+</div>
+
+<div id="detailView" class="hidden">
+  <button onclick="back()">← 返回列表</button>
+  <h2 id="name"></h2>
+  <div id="images"></div>
+  <div id="video"></div>
+  <div id="detail"></div>
+
+  <hr>
+  <select id="color"></select>
+  <select id="size"></select>
+  <input id="qty" type="number" min="1" value="1">
+  <br><br>
+  <button onclick="order()">🛒 下單</button>
+  <button onclick="share()">📢 分享</button>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const productCode = params.get("productCode");
+
+async function init() {
+  await liff.init({ liffId: "2008857998-wtK5loPp" });
+  const res = await fetch("/api/products");
+  const products = await res.json();
+
+  if (!productCode) {
+    // 商品列表
+    products
+      .filter(p => p.active === "TRUE" && p.closed !== "TRUE")
+      .forEach(p => {
+        list.innerHTML += `
+          <div class="card" onclick="openDetail('${p.productCode}')">
+            <b>${p.productName}</b><br>
+            💰 ${p.price}
+          </div>`;
+      });
+  } else {
+    // 商品詳情
+    const p = products.find(p => p.productCode === productCode);
+    showDetail(p);
+  }
+}
+
+function openDetail(code) {
+  location.href = `liff-product.html?productCode=${code}`;
+}
+
+function back() {
+  location.href = "liff-product.html";
+}
+
+function showDetail(p) {
+  listView.classList.add("hidden");
+  detailView.classList.remove("hidden");
+
+  name.innerText = p.productName;
+  detail.innerHTML = p.productDetail || "";
+
+  if (p.images) {
+    p.images.split(",").forEach(u => {
+      images.innerHTML += `<img src="${u.trim()}">`;
+    });
+  }
+
+  if (p.video) {
+    video.innerHTML = `<iframe width="100%" height="200" src="${p.video}" allowfullscreen></iframe>`;
+  }
+
+  p.colors.split("/").forEach(c => color.innerHTML += `<option>${c}</option>`);
+  p.sizes.split("/").forEach(s => size.innerHTML += `<option>${s}</option>`);
+}
+
+async function order() {
+  const profile = await liff.getProfile();
+  await fetch("/api/buyer/order", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId: profile.userId,
+      productCode,
+      color: color.value,
+      size: size.value,
+      qty: qty.value
+    })
+  });
+  alert("下單成功");
+}
+
+function share() {
+  liff.shareTargetPicker([{
+    type: "text",
+    text: `🔥 ${name.innerText}\n點我看商品👇\nhttps://liff.line.me/你的商品LIFF?productCode=${productCode}`
+  }]);
+}
+
+init();
+</script>
+</body>
+</html>
+
