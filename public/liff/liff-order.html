@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>商品下單</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+body { font-family: sans-serif; padding: 12px; }
+.card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.card h3 { margin: 0 0 6px; }
+.price { color: #d32f2f; font-weight: bold; }
+button {
+  margin-top: 8px;
+  width: 100%;
+  padding: 10px;
+}
+</style>
+</head>
+
+<body>
+<h2>🛒 開團商品</h2>
+<div id="list">載入中…</div>
+
+<script>
+async function init() {
+  await liff.init({ liffId: "2008857998-imqg5sNq" });
+  if (!liff.isLoggedIn()) {
+    liff.login();
+    return;
+  }
+
+  loadProducts();
+}
+
+async function loadProducts() {
+  const res = await fetch("/api/products");
+  const products = await res.json();
+
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  products
+    .filter(p => p.active === "TRUE")
+    .forEach(p => {
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <h3>${p.productName}</h3>
+        <div class="price">NT$ ${p.price}</div>
+        <button onclick="openDetail('${p.productCode}')">
+          查看商品 / 下單
+        </button>
+      `;
+      list.appendChild(div);
+    });
+}
+
+function openDetail(productCode) {
+  liff.openWindow({
+    url: `https://你的網域/liff/liff-product-detail.html?productCode=${productCode}`,
+    external: false
+  });
+}
+
+init();
+</script>
+</body>
+</html>

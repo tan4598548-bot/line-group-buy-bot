@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>我的等待中訂單</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 16px; }
+    h2 { margin-bottom: 12px; }
+    .item {
+      border-bottom: 1px solid #ddd;
+      padding: 8px 0;
+    }
+    .empty { color: #888; }
+  </style>
+</head>
+<body>
+  <h2>📦 我還在等的商品</h2>
+  <div id="list">讀取中...</div>
+
+<script>
+async function main() {
+  await liff.init({ liffId: "2008857998-qOI2DqCC" });
+
+  if (!liff.isLoggedIn()) {
+    liff.login();
+    return;
+  }
+
+  const profile = await liff.getProfile();
+  const userId = profile.userId;
+
+  const res = await fetch(`/api/buyer/pending?userId=${userId}`);
+  const data = await res.json();
+
+  const el = document.getElementById("list");
+  if (!data.length) {
+    el.innerHTML = `<div class="empty">🎉 目前沒有等待中的訂單</div>`;
+    return;
+  }
+
+  el.innerHTML = data.map(o => `
+    <div class="item">
+      <b>${o.productName}</b><br/>
+      ${o.color || ""} ${o.size || ""} × ${o.quantity}
+    </div>
+  `).join("");
+}
+
+main();
+</script>
+</body>
+</html>

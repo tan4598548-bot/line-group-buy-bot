@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>我要下單</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      font-family: system-ui;
+      background: #f6f6f6;
+      padding: 12px;
+    }
+    .card {
+      background: #fff;
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,.1);
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #06c755;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>🛒 團購下單</h2>
+  <div id="products"></div>
+
+<script>
+let userId = "";
+
+async function init() {
+  await liff.init({ liffId: "2008857998-jbKsKkPY" });
+  if (!liff.isLoggedIn()) liff.login();
+
+  const profile = await liff.getProfile();
+  userId = profile.userId;
+
+  loadProducts();
+}
+
+async function loadProducts() {
+  const res = await fetch("/api/admin/products/open");
+  const products = await res.json();
+  const box = document.getElementById("products");
+  box.innerHTML = "";
+
+  products.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML = `
+      <b>${p.name}</b><br/>
+      價格：$${p.price}
+      <button onclick="order('${p.code}')">下單</button>
+    `;
+    box.appendChild(div);
+  });
+}
+
+function order(code) {
+  alert("下一步可接：尺寸 / 顏色 / 數量");
+}
+
+init();
+</script>
+</body>
+</html>

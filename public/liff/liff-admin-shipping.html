@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>發貨列印</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+<h2>🚚 發貨 PDF</h2>
+<div id="list"></div>
+<button onclick="ship()">📄 產生 PDF</button>
+
+<script>
+let userId = "";
+let orders = [];
+let adminUserId = null; // 🔴 新增：全域儲存 admin userId
+
+async function init() {
+  await liff.init({ liffId: "2008857998-HUEXLkgO" });
+  if (!liff.isLoggedIn()) {
+    liff.login();
+    return;
+  adminUserId = liff.getContext().userId; // 🔴 新增  
+  }
+
+  const profile = await liff.getProfile();
+  userId = profile.userId;
+
+  const res = await fetch(`/api/admin/shipping-list?userId=${userId}`);
+  if (!res.ok) {
+    alert("非管理員");
+    liff.closeWindow();
+    return;
+  }
+
+  orders = await res.json();
+  render();
+}
+
+function render() {
+  const el = document.getElementById("list");
+  el.innerHTML = orders.map(o => `
+    <label>
+      <input type="checkbox" value="${o.orderId}">
+      ${o.buyerName} - ${o.productName} x ${o.qty}
+    </label><br>
+  `).join("");
+}
+
+async function ship() {
+  const ids = [...document.querySelectorAll("input:checked")].map(i => i.value);
+  if (!ids.length) return alert("請選擇訂單");
+
+  const res = await fetch("/api/admin/ship", {
+    method: "POST",
+    headers: { "Content-Type": "application/json",
+      /* 🔴 新增（必要） */
+    "X-LIFF-USER-ID": profile.userId,
+    "X-LIFF-ROLE": "admin"
+     },
+    body: JSON.stringify({ userId, orderIds: ids })
+  });
+
+  const data = await res.json();
+  window.open(data.pdfUrl, "_blank");
+}
+
+init();
+</script>
+</body>
+</html>

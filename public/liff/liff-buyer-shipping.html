@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>我的出貨狀態</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+body { font-family: system-ui; padding: 12px; background:#f5f5f5; }
+.order {
+  background:#fff;
+  padding:12px;
+  border-radius:8px;
+  margin-bottom:10px;
+}
+.shipped { color: green; }
+</style>
+</head>
+<body>
+
+<h2>📦 我的出貨狀態</h2>
+<div id="orders">載入中…</div>
+
+<script>
+async function init() {
+  await liff.init({ liffId: '2008857998-fa5yPkPR' });
+  const profile = await liff.getProfile();
+
+  const res = await fetch(`/api/buyer/shipping?lineUserId=${profile.userId}`);
+  const orders = await res.json();
+
+  const box = document.getElementById('orders');
+  box.innerHTML = '';
+
+  orders.forEach(o => {
+    box.innerHTML += `
+      <div class="order">
+        <div><strong>${o.productName}</strong></div>
+        <div>${o.color} / ${o.size} x ${o.qty}</div>
+        <div class="shipped">
+          ${o.ship_status === 'shipped' ? '✅ 已出貨' : '⏳ 處理中'}
+        </div>
+      </div>
+    `;
+  });
+}
+init();
+</script>
+</body>
+</html>

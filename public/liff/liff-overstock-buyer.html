@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>現貨出清</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+<h2>🔥 現貨出清（先到先買）</h2>
+<div id="list"></div>
+
+<script>
+let user;
+
+liff.init({ liffId: "2008857998-LKw8W2JA" }).then(async () => {
+  user = await liff.getProfile();
+  load();
+});
+
+async function load() {
+  const res = await fetch("/api/overstock/buyer");
+  const items = await res.json();
+
+  document.getElementById("list").innerHTML =
+    items.map(i => `
+      <div>
+        <b>${i.product_name}</b><br>
+        ${i.color} ${i.size}<br>
+        $${i.price}（剩 ${i.qty}）<br>
+        <button onclick="buy('${i.overstock_id}')">立即購買</button>
+      </div><hr>
+    `).join("");
+}
+
+async function buy(id) {
+  const res = await fetch("/api/overstock/buyer/order", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      overstockId: id,
+      buyerId: user.userId,
+      buyerName: user.displayName
+    })
+  });
+  const data = await res.json();
+  alert(data.ok ? "購買成功" : data.error);
+  load();
+}
+</script>
+</body>
+</html>
