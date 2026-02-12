@@ -1,13 +1,20 @@
 import express from "express";
 import path from "path";
+import { fileURLToPath } from "url";
+
+/* ===== ESM dirname support ===== */
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /* ===== Routes ===== */
 import adminRoutes from "./routes/adminRoutes.js";
 import adminArrivalRoutes from "./routes/adminArrival.js";
 import adminShippingRoutes from "./routes/adminShipping.js";
-import adminProductRoutes from "./routes/adminProduct.js";
-import overstockRoutes from "./routes/overstock.js";
+import adminProductRoutes from "./routes/adminproduct.js"; // 小寫
+import adminOverstockRoutes from "./routes/adminOverstock.js";
+import adminOverstockStatsRoutes from "./routes/adminOverstockStats.js";
 import buyerOrderRoutes from "./routes/buyerOrder.js";
+import overstockRoutes from "./routes/overstock.js";
 
 /* ===== Services ===== */
 import {
@@ -22,7 +29,6 @@ import {
   getBuyerPackingList
 } from "./services/sheetService.js";
 
-import { handleOrder } from "./services/orderService.js";
 import { generateShippingPdf } from "./services/pdfService.js";
 import { generateBuyerPackingPdf } from "./services/buyerPackingPdfService.js";
 
@@ -30,9 +36,8 @@ import { generateBuyerPackingPdf } from "./services/buyerPackingPdfService.js";
 const app = express();
 
 app.use(express.json());
-app.use(express.static("public"));
-app.use("/api/buyer", buyerOrderRoutes);
-app.use("/api/admin/overstock", adminOverstockStatsRoutes);
+app.use(express.static(path.join(__dirname, "public")));
+app.use("/pdf", express.static(path.join(__dirname, "pdf")));
 
 /* =====================
    管理員 API
@@ -41,6 +46,13 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminArrivalRoutes);
 app.use("/api/admin", adminShippingRoutes);
 app.use("/api/admin", adminProductRoutes);
+app.use("/api/admin/overstock", adminOverstockRoutes);
+app.use("/api/admin/overstock", adminOverstockStatsRoutes);
+
+/* =====================
+   買家 API
+===================== */
+app.use("/api/buyer", buyerOrderRoutes);
 
 /* =====================
    溢多商品（現貨出清）
@@ -150,6 +162,7 @@ app.get("/api/admin/buyer-packing-pdf", async (req, res) => {
     }
 
     const pdfPath = await generateBuyerPackingPdf(list);
+
     res.json({
       ok: true,
       pdfUrl: `/pdf/${path.basename(pdfPath)}`
@@ -169,7 +182,10 @@ app.get("/api/admin/close-reminder", async (req, res) => {
       return res.json({ text: "明日無即將結單商品" });
     }
 
-    const list = products.map((p, i) => `${i + 1}. ${p.productName}`).join("\n");
+    const list = products
+      .map((p, i) => `${i + 1}. ${p.productName}`)
+      .join("\n");
+
     res.json({
       text: `⚠️【結單提醒】\n\n${list}\n\n請盡速下單`
     });
@@ -182,6 +198,7 @@ app.get("/api/admin/close-reminder", async (req, res) => {
    Server
 ===================== */
 const PORT = process.env.PORT || 10000;
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
