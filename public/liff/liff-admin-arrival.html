@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>到貨點貨</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 12px; }
+    .item { border-bottom: 1px solid #ddd; padding: 8px 0; }
+    input[type=number] { width: 60px; }
+    button { margin-top: 12px; padding: 10px; width: 100%; }
+  </style>
+</head>
+<body>
+  <h2>📦 到貨點貨</h2>
+  <div id="list"></div>
+
+  <button onclick="submitArrival()">✅ 確認到貨</button>
+  <button onclick="clearArrived()">🧹 一鍵清除已到貨</button>
+
+<script>
+let userId = "";
+let items = [];
+let adminUserId = null; // 🔴 新增：全域儲存 admin userId
+
+async function init() {
+  await liff.init({ liffId: "2008857998-ePcCkr6K" });
+  if (!liff.isLoggedIn()) {
+    liff.login();
+    return;
+  adminUserId = liff.getContext().userId; // 🔴 新增  
+  }
+
+  const profile = await liff.getProfile();
+  userId = profile.userId;
+
+  const res = await fetch(`/api/admin/arrival-list?userId=${userId}`);
+  if (!res.ok) {
+    alert("非管理員");
+    liff.closeWindow();
+    return;
+  }
+
+  items = await res.json();
+  render();
+}
+
+function render() {
+  const el = document.getElementById("list");
+  el.innerHTML = items.map((i, idx) => `
+    <div class="item">
+      <label>
+        <input type="checkbox" data-idx="${idx}">
+        ${i.productName} / ${i.color} / ${i.size}
+        （訂購 ${i.totalQty}）
+      </label>
+      實到：
+      <input type="number" min="0" value="${i.totalQty}" data-qty="${idx}">
+    </div>
+  `).join("");
+}
+
+async function submitArrival() {
+  const selected = [];
+  document.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    if (cb.checked) {
+      const idx = cb.dataset.idx;
+      const qty = document.querySelector(`input[data-qty="${idx}"]`).value;
+      selected.push({ ...items[idx], arrivedQty: Number(qty) });
+    }
+  });
+
+  if (!selected.length) {
+    alert("請勾選項目");
+    return;
+  }
+
+  await fetch("/api/admin/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, items: selected })
+  });
+
+  alert("到貨完成");
+  location.reload();
+}
+
+async function clearArrived() {
+  if (!confirm("確定清除已到貨項目？")) return;
+
+  await fetch("/api/admin/clear", {
+    method: "POST",
+    headers: { "Content-Type": "application/json",
+        /* 🔴 新增（必要） */
+    "X-LIFF-USER-ID": profile.userId,
+    "X-LIFF-ROLE": "admin"
+     },
+    body: JSON.stringify({ userId })
+  });
+
+  alert("已清除");
+  location.reload();
+}
+
+init();
+</script>
+</body>
+</html>
