@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 import adminRoutes from "./routes/adminRoutes.js";
 import adminArrivalRoutes from "./routes/adminArrival.js";
 import adminShippingRoutes from "./routes/adminShipping.js";
-import adminProductRoutes from "./routes/adminproduct.js"; // 小寫
+import adminProductRoutes from "./routes/adminproduct.js";
 import adminOverstockRoutes from "./routes/adminOverstock.js";
 import adminOverstockStatsRoutes from "./routes/adminOverstockStats.js";
 import buyerOrderRoutes from "./routes/buyerOrder.js";
@@ -36,6 +36,10 @@ import { generateBuyerPackingPdf } from "./services/buyerPackingPdfService.js";
 const app = express();
 
 app.use(express.json());
+
+/* =====================
+   靜態資料夾
+===================== */
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/pdf", express.static(path.join(__dirname, "pdf")));
 
@@ -55,7 +59,7 @@ app.use("/api/admin/overstock", adminOverstockStatsRoutes);
 app.use("/api/buyer", buyerOrderRoutes);
 
 /* =====================
-   溢多商品（現貨出清）
+   溢多商品
 ===================== */
 app.use("/api/overstock", overstockRoutes);
 
@@ -108,7 +112,7 @@ app.get("/api/buyer/orders", async (req, res) => {
 });
 
 /* =====================
-   買家：待出貨
+   買家待出貨
 ===================== */
 app.get("/api/buyer/pending", async (req, res) => {
   try {
@@ -119,7 +123,7 @@ app.get("/api/buyer/pending", async (req, res) => {
 });
 
 /* =====================
-   管理：出貨清單
+   管理出貨清單
 ===================== */
 app.get("/api/admin/shipping-list", async (req, res) => {
   try {
@@ -130,7 +134,7 @@ app.get("/api/admin/shipping-list", async (req, res) => {
 });
 
 /* =====================
-   管理：標記出貨 + PDF
+   標記出貨 + PDF
 ===================== */
 app.post("/api/admin/ship", async (req, res) => {
   try {
@@ -152,7 +156,7 @@ app.post("/api/admin/ship", async (req, res) => {
 });
 
 /* =====================
-   管理：買家揀貨 PDF
+   買家揀貨 PDF
 ===================== */
 app.get("/api/admin/buyer-packing-pdf", async (req, res) => {
   try {
@@ -173,7 +177,7 @@ app.get("/api/admin/buyer-packing-pdf", async (req, res) => {
 });
 
 /* =====================
-   結單提醒文案
+   結單提醒
 ===================== */
 app.get("/api/admin/close-reminder", async (req, res) => {
   try {
@@ -192,6 +196,13 @@ app.get("/api/admin/close-reminder", async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+/* =====================
+   404 fallback
+===================== */
+app.use((req, res) => {
+  res.status(404).send("404 Not Found");
 });
 
 /* =====================
