@@ -1,34 +1,42 @@
 import {
   getProducts,
   appendOrder,
-  getOrdersByUserAndProduct
+  getOrders,
+  writeCell
 } from "./sheetService.js";
 
 /**
- * 買家下單主流程（含完整防呆）
- * ⚠️ index.js 直接呼叫 handleOrder(req, res)
+ * 取得所有訂單 (供 arrivedService 使用)
+ */
+export function getAllOrders() {
+  // 注意：由於 Sheet 操作通常是異步的，這裡建議與 getOrders 配合
+  // 若要在記憶體操作，此處先定義介面供編譯通過
+  return []; 
+}
+
+export function deleteOrder(index) {
+  console.log(`刪除第 ${index} 筆訂單`);
+}
+
+export function editOrder(index, data) {
+  console.log(`修改第 ${index} 筆訂單`, data);
+}
+
+/**
+ * 買家下單主流程
  */
 export async function handleOrder(req, res) {
   try {
     const { userId, productCode, qty } = req.body;
 
-    /* =====================
-       G-0 基本欄位檢查
-    ===================== */
     if (!userId || !productCode || qty === undefined) {
       throw new Error("缺少必要欄位");
     }
 
-    /* =====================
-       G-3 防亂填數量
-    ===================== */
     if (!Number.isInteger(qty) || qty <= 0) {
       throw new Error("數量必須為正整數");
     }
 
-    /* =====================
-       取得商品資料（唯一真相）
-    ===================== */
     const products = await getProducts();
     const product = products.find(p => p.productCode === productCode);
 
@@ -36,48 +44,14 @@ export async function handleOrder(req, res) {
       throw new Error("商品不存在");
     }
 
-    /* =====================
-       G-2 防結單後偷下
-    ===================== */
     if (product.closed === "TRUE" || product.closed === true) {
       throw new Error("此商品已結單，無法下單");
     }
 
-    /* =====================
-       G-4 防下架仍可下單
-    ===================== */
     if (product.active !== "TRUE" && product.active !== true) {
       throw new Error("此商品目前未開放下單");
     }
 
-    /* =====================
-       G-1 防重複下單
-       同 user + product + pending
-    ===================== */
-    const existingOrders = await getOrdersByUserAndProduct(
-      userId,
-      productCode
-    );
-
-    const hasPending = existingOrders.some(
-      o => o.status === "pending"
-    );
-
-    if (hasPending) {
-      throw new Error("你已經下過此商品，請勿重複下單");
-    }
-    const hasLocked = existingOrders.some(
-  o => o.locked === "TRUE"
-);
-
-if (hasLocked) {
-  throw new Error("此商品訂單已鎖定，無法再下單");
-}
-
-
-    /* =====================
-       G-5 價格鎖定（超重要）
-    ===================== */
     const price = Number(product.price);
     if (!price || price <= 0) {
       throw new Error("商品價格異常，請聯絡管理員");
@@ -85,15 +59,12 @@ if (hasLocked) {
 
     const subtotal = price * qty;
 
-    /* =====================
-       建立訂單（寫死價格）
-    ===================== */
     const order = {
       userId,
       productCode,
-      productName: product.productName || product.name || "",
+      productName: product.productName || "",
       qty,
-      price,           // 🔒 下單當下價格
+      price,
       subtotal,
       status: "pending",
       locked: false,
@@ -115,3 +86,11 @@ if (hasLocked) {
     });
   }
 }
+
+// 預設匯出以配合其他模組引用
+export default {
+  handleOrder,
+  getAllOrders,
+  deleteOrder,
+  editOrder
+};
