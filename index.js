@@ -14,7 +14,6 @@ import adminProductRoutes from "./routes/adminproduct.js";
 import adminOverstockRoutes from "./routes/adminOverstock.js";
 import adminOverstockStatsRoutes from "./routes/adminOverstockStats.js";
 import buyerOrderRoutes from "./routes/buyerOrder.js";
-import overstockRoutes from "./routes/overstock.js";
 
 /* ===== Services ===== */
 import {
@@ -58,10 +57,6 @@ app.use("/api/admin/overstock", adminOverstockStatsRoutes);
 ===================== */
 app.use("/api/buyer", buyerOrderRoutes);
 
-/* =====================
-   溢多商品
-===================== */
-app.use("/api/overstock", overstockRoutes);
 
 /* =====================
    商品清單
