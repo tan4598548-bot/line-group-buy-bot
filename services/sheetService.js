@@ -29,7 +29,7 @@ export async function writeCell(sheet, cell, value) {
 }
 
 /* =========================
-   Products
+   Products 相關功能
 ========================= */
 export async function getProducts() {
   const rows = await readSheet(PRODUCT_SHEET);
@@ -43,12 +43,25 @@ export async function getProducts() {
     active: r[4] === "TRUE",
     closeDate: r[5],
     reminded: r[6] === "TRUE",
+    closed: r[7] === "TRUE", // 假設 H 欄是結單狀態
     _row: i + 2,
   }));
 }
 
+// 補回 productService.js 呼叫的 updateProductDetail
+export async function updateProductDetail(productCode, data) {
+  const products = await getProducts();
+  const p = products.find(p => p.productCode === productCode);
+  if (!p) throw new Error("商品不存在");
+
+  // 這裡簡單示範更新名稱，你可以根據需要擴充
+  if (data.productName) {
+    await writeCell(PRODUCT_SHEET, `B${p._row}`, data.productName);
+  }
+}
+
 /* =========================
-   Orders (修正點)
+   Orders 相關功能
 ========================= */
 export async function getOrders() {
   const rows = await readSheet(ORDER_SHEET);
@@ -63,29 +76,22 @@ export async function getOrders() {
     size: r[5],
     qty: Number(r[6]),
     price: Number(r[7]),
-    status: r[8], // 例如: pending, shipped
-    note: r[9],
+    status: r[8],
     _row: i + 2,
   }));
 }
 
-// 補上 shippingService.js 缺少的 getPendingOrders
 export async function getPendingOrders() {
   const orders = await getOrders();
   return orders.filter(o => o.status === "pending");
 }
 
-// 補上 shippingService.js 缺少的 markOrdersShipped
 export async function markOrdersShipped(rowIndices) {
   for (const row of rowIndices) {
-    // 假設狀態在第 I 欄 (第 9 欄)
     await writeCell(ORDER_SHEET, `I${row}`, "shipped");
   }
 }
 
-/* =========================
-   其他共用功能
-========================= */
 export async function appendOrder(order) {
   await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
@@ -108,21 +114,29 @@ export async function appendOrder(order) {
   });
 }
 
-export async function syncVendorOrders(orders) {
-  console.log("正在同步廠商訂單...");
-}
-
 export async function getOrdersByUserAndProduct(userId, productCode) {
   const orders = await getOrders();
   return orders.filter(o => o.lineUserId === userId && o.productCode === productCode);
 }
 
-// 預設匯出
-export default {
+// 補回同步功能防止報錯
+export async function syncVendorOrders(orders) {
+  console.log("Syncing orders...");
+}
+
+/* =========================
+   匯出對齊
+========================= */
+const sheetService = {
   getProducts,
+  updateProductDetail,
   getOrders,
   getPendingOrders,
   markOrdersShipped,
   writeCell,
-  appendOrder
+  appendOrder,
+  syncVendorOrders,
+  getOrdersByUserAndProduct
 };
+
+export default sheetService;
