@@ -20,31 +20,21 @@ import adminProductRoutes from "./routes/adminProduct.js";
 import buyerOrderRoutes from "./routes/buyerOrder.js";
 
 /* ===== LINE Webhook (測試重點) ===== */
-// 這裡同時支援 /webhook 和 /callback，防止你設錯
 app.post(["/webhook", "/callback"], (req, res) => {
   console.log("========================================");
   console.log("📢 收到 Webhook 請求！");
   
   const events = req.body.events;
-
-  if (!events || events.length === 0) {
-    console.log("⚠️ 收到請求但沒有事件資料內容");
-  } else {
-    events.forEach((event, index) => {
-      console.log(`📍 事件 [${index + 1}]:`);
-      console.log(`   - 類型: ${event.type}`);
-      console.log(`   - 來源類型: ${event.source.type}`);
-      
-      // 如果是群組，印出 Group ID
+  if (events) {
+    events.forEach((event) => {
       if (event.source.type === 'group') {
-        console.log(`   - 🆔 群組 ID (GroupID): ${event.source.groupId}`);
-      }
-      
-      // 如果是個人私訊
-      if (event.source.type === 'user') {
-        console.log(`   - 👤 使用者 ID (UserID): ${event.source.userId}`);
+        console.log(`🆔 群組 ID (GroupID): ${event.source.groupId}`);
       }
     });
+  }
+  console.log("========================================");
+  res.sendStatus(200); 
+});
   }
   console.log("========================================");
   res.sendStatus(200); // 務必回傳 200 給 LINE
