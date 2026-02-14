@@ -13,7 +13,7 @@ app.use(express.json());
 import adminRoutes from "./routes/adminRoutes.js";
 import adminArrivalRoutes from "./routes/adminArrival.js";
 import adminShippingRoutes from "./routes/adminShipping.js";
-import adminProductRoutes from "./routes/adminProduct.js";
+import adminProductRoutes from "./routes/adminproduct.js";
 import buyerOrderRoutes from "./routes/buyerOrder.js";
 
 /* ===== LINE Webhook (查 Group ID 專用) ===== */
