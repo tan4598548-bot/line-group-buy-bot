@@ -29,7 +29,7 @@ export async function writeCell(sheet, cell, value) {
 }
 
 /* =========================
-   Products 相關
+   Products 相關 (對齊 productService & index)
 ========================= */
 export async function getProducts() {
   const rows = await readSheet(PRODUCT_SHEET);
@@ -47,7 +47,18 @@ export async function getProducts() {
   }));
 }
 
-// 對齊 index.js 的 updateProductStatus
+// 補回這個失蹤的函式，解決 productService.js 的報錯
+export async function updateProductDetail(productCode, data) {
+  const products = await getProducts();
+  const p = products.find(p => p.productCode === productCode);
+  if (!p) throw new Error("商品不存在");
+  
+  // 範例：更新 B 欄 (名稱)
+  if (data.productName) {
+    await writeCell(PRODUCT_SHEET, `B${p._row}`, data.productName);
+  }
+}
+
 export async function updateProductStatus(productCode, isActive) {
   const products = await getProducts();
   const p = products.find(p => p.productCode === productCode);
@@ -55,7 +66,6 @@ export async function updateProductStatus(productCode, isActive) {
   await writeCell(PRODUCT_SHEET, `E${p._row}`, isActive ? "TRUE" : "FALSE");
 }
 
-// 對齊 index.js 的 markProductClosed
 export async function markProductClosed(productCode) {
   const products = await getProducts();
   const p = products.find(p => p.productCode === productCode);
@@ -63,7 +73,6 @@ export async function markProductClosed(productCode) {
   await writeCell(PRODUCT_SHEET, `H${p._row}`, "TRUE");
 }
 
-// 對齊 index.js 的 getProductsClosingTomorrow
 export async function getProductsClosingTomorrow() {
   const products = await getProducts();
   const tomorrow = new Date();
@@ -73,7 +82,7 @@ export async function getProductsClosingTomorrow() {
 }
 
 /* =========================
-   Orders 相關
+   Orders 相關 (對齊 index)
 ========================= */
 export async function getOrders() {
   const rows = await readSheet(ORDER_SHEET);
@@ -92,25 +101,21 @@ export async function getOrders() {
   }));
 }
 
-// 重要：對齊 index.js 的 getBuyerOrders
 export async function getBuyerOrders(userId) {
   const orders = await getOrders();
   return userId ? orders.filter(o => o.lineUserId === userId) : orders;
 }
 
-// 重要：對齊 index.js 的 getBuyerPendingOrders
 export async function getBuyerPendingOrders(userId) {
   const orders = await getBuyerOrders(userId);
   return orders.filter(o => o.status === "pending");
 }
 
-// 重要：對齊 index.js 的 getShippingList
 export async function getShippingList() {
   const orders = await getOrders();
   return orders.filter(o => o.status === "pending");
 }
 
-// 重要：對齊 index.js 的 markOrdersShipped
 export async function markOrdersShipped(rowIndices) {
   const results = [];
   for (const row of rowIndices) {
@@ -120,7 +125,6 @@ export async function markOrdersShipped(rowIndices) {
   return results;
 }
 
-// 重要：對齊 index.js 的 getBuyerPackingList
 export async function getBuyerPackingList() {
   const orders = await getOrders();
   const packingMap = {};
@@ -135,8 +139,10 @@ export async function getBuyerPackingList() {
   return packingMap;
 }
 
+// 預設匯出，對齊所有 Service 調用
 const sheetService = {
   getProducts,
+  updateProductDetail,
   updateProductStatus,
   markProductClosed,
   getBuyerOrders,
