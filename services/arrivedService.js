@@ -1,11 +1,11 @@
-const orderService = require('./orderService');
-const sheetService = require('./sheetService');
+import { getAllOrders, deleteOrder, editOrder } from './orderService.js';
+import { syncVendorOrders } from './sheetService.js';
 
 /**
  * 給 LIFF 用的「可讀商品清單」
  */
-function getArrivalList() {
-  const orders = orderService.getAllOrders();
+export function getArrivalList() {
+  const orders = getAllOrders();
   const map = {};
 
   orders.forEach(o => {
@@ -27,8 +27,8 @@ function getArrivalList() {
 /**
  * 確認到貨
  */
-async function confirmArrived(items) {
-  let orders = orderService.getAllOrders();
+export async function confirmArrived(items) {
+  let orders = getAllOrders();
 
   items.forEach(item => {
     let need = item.quantity;
@@ -44,11 +44,11 @@ async function confirmArrived(items) {
         need -= take;
 
         if (take === o.quantity) {
-          orderService.deleteOrder(i);
+          deleteOrder(i);
           orders.splice(i, 1);
           i--;
         } else {
-          orderService.editOrder(i, { quantity: o.quantity - take });
+          editOrder(i, { quantity: o.quantity - take });
           orders[i].quantity -= take;
         }
       }
@@ -56,10 +56,14 @@ async function confirmArrived(items) {
   });
 
   // 同步廠商訂貨表（只剩未到貨）
-  await sheetService.syncVendorOrders(orderService.getAllOrders());
+  await syncVendorOrders(getAllOrders());
 }
 
-module.exports = {
+// 為了配合你 adminRoutes.js 的 import arrivedService from ...
+// 我們加上這個 default 匯出
+export const arrivedService = {
   getArrivalList,
   confirmArrived
 };
+
+export default arrivedService;
