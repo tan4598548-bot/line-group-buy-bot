@@ -29,7 +29,7 @@ export async function writeCell(sheet, cell, value) {
 }
 
 /* =========================
-   Products 相關 (對齊 productService & index)
+   Products 相關
 ========================= */
 export async function getProducts() {
   const rows = await readSheet(PRODUCT_SHEET);
@@ -47,13 +47,10 @@ export async function getProducts() {
   }));
 }
 
-// 補回這個失蹤的函式，解決 productService.js 的報錯
 export async function updateProductDetail(productCode, data) {
   const products = await getProducts();
   const p = products.find(p => p.productCode === productCode);
   if (!p) throw new Error("商品不存在");
-  
-  // 範例：更新 B 欄 (名稱)
   if (data.productName) {
     await writeCell(PRODUCT_SHEET, `B${p._row}`, data.productName);
   }
@@ -82,7 +79,7 @@ export async function getProductsClosingTomorrow() {
 }
 
 /* =========================
-   Orders 相關 (對齊 index)
+   Orders 相關 (修正重點：補回 appendOrder)
 ========================= */
 export async function getOrders() {
   const rows = await readSheet(ORDER_SHEET);
@@ -99,6 +96,29 @@ export async function getOrders() {
     status: r[8],
     _row: i + 2,
   }));
+}
+
+// 補回這個關鍵函式，供 orderService.js 使用
+export async function appendOrder(order) {
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${ORDER_SHEET}!A1`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        order.userId,
+        order.buyerName || "", 
+        order.productCode,
+        order.productName,
+        order.color || "", 
+        order.size || "", 
+        order.qty,
+        order.price,
+        order.status || "pending",
+        new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })
+      ]],
+    },
+  });
 }
 
 export async function getBuyerOrders(userId) {
@@ -139,18 +159,20 @@ export async function getBuyerPackingList() {
   return packingMap;
 }
 
-// 預設匯出，對齊所有 Service 調用
+// 預設匯出
 const sheetService = {
   getProducts,
   updateProductDetail,
   updateProductStatus,
   markProductClosed,
+  getOrders,
   getBuyerOrders,
   getShippingList,
   markOrdersShipped,
   getBuyerPendingOrders,
   getProductsClosingTomorrow,
-  getBuyerPackingList
+  getBuyerPackingList,
+  appendOrder
 };
 
 export default sheetService;
