@@ -14,7 +14,16 @@ import adminProductRoutes from "./routes/adminproduct.js";
 import adminOverstockRoutes from "./routes/adminOverstock.js";
 import adminOverstockStatsRoutes from "./routes/adminOverstockStats.js";
 import buyerOrderRoutes from "./routes/buyerOrder.js";
+import overstockRoutes from "./routes/overstock.js";
+import line from "@line/bot-sdk";
 
+/* ===== LINE Config ===== */
+const lineConfig = {
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET
+};
+
+const client = new line.Client(lineConfig);
 /* ===== Services ===== */
 import {
   getProducts,
@@ -57,6 +66,10 @@ app.use("/api/admin/overstock", adminOverstockStatsRoutes);
 ===================== */
 app.use("/api/buyer", buyerOrderRoutes);
 
+/* =====================
+   溢多商品
+===================== */
+app.use("/api/overstock", overstockRoutes);
 
 /* =====================
    商品清單
@@ -192,6 +205,35 @@ app.get("/api/admin/close-reminder", async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+/* =====================
+   LINE Webhook
+===================== */
+app.post(
+  "/webhook",
+  line.middleware(lineConfig),
+  async (req, res) => {
+    try {
+      const events = req.body.events;
+
+      for (const event of events) {
+        console.log("====== EVENT ======");
+        console.log(JSON.stringify(event, null, 2));
+
+        // 👇 這裡才會出現 groupId
+        if (event.source?.groupId) {
+          console.log("🔥 GROUP ID =", event.source.groupId);
+        }
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.sendStatus(500);
+    }
+  }
+);
+
 
 /* =====================
    404 fallback
