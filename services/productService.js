@@ -1,8 +1,7 @@
 import { 
   getProducts, 
   updateProductDetail, 
-  writeCell,
-  appendOrder // 這裡通常是 sheetService 裡寫入新資料的函式
+  writeCell 
 } from "./sheetService.js";
 
 /**
@@ -20,24 +19,28 @@ export async function updateProduct(productCode, data) {
 }
 
 /**
- * 新增商品 (對齊 adminProduct.js 的需求)
+ * 新增商品
  */
 export async function createProduct(productData) {
-  // 這裡假設你在 sheetService 有對應的寫入邏輯
-  // 先定義基本邏輯確保不報錯
   console.log("Creating product:", productData);
-  // 實際上會呼叫 sheetService 的寫入功能
 }
 
 /**
- * 切換商品上架狀態
+ * 切換商品狀態 (對齊 adminproduct.js 的需求)
  */
-export async function toggleProductActive(productCode, isActive) {
+export async function updateProductStatus(productCode, isActive) {
   const products = await getProducts();
   const p = products.find(p => p.productCode === productCode);
   if (!p) throw new Error("商品不存在");
+  
+  // 假設 active 欄位在 E 欄
   await writeCell("Products", `E${p._row}`, isActive ? "TRUE" : "FALSE");
 }
+
+/**
+ * 切換商品上架狀態 (別名供其他模組調用)
+ */
+export const toggleProductActive = updateProductStatus;
 
 /**
  * 結單處理
@@ -46,6 +49,8 @@ export async function closeProduct(productCode) {
   const products = await getProducts();
   const p = products.find(p => p.productCode === productCode);
   if (!p) throw new Error("商品不存在");
+  
+  // 假設 closed 欄位在 H 欄
   await writeCell("Products", `H${p._row}`, "TRUE");
 }
 
@@ -54,6 +59,7 @@ const productService = {
   listProducts,
   updateProduct,
   createProduct,
+  updateProductStatus,
   toggleProductActive,
   closeProduct
 };
