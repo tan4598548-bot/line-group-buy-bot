@@ -55,3 +55,4 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 偵測機器人啟動成功，通訊埠： ${PORT}`);
 });
+ 
