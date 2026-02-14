@@ -1,77 +1,67 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import line from "@line/bot-sdk";
+// 暫時不引用 line-sdk middleware 以排除解析問題
 
 /* ===== ESM dirname ===== */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/* ===== LINE Config ===== */
-const lineConfig = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET
-};
+const app = express();
 
-const client = new line.Client(lineConfig);
+// 注意：如果 LINE 送來的資料是 JSON，這行必須在前面
+app.use(express.json());
 
-/* ===== Routes ===== */
+/* ===== Routes & Services (保留你的引用) ===== */
 import adminRoutes from "./routes/adminRoutes.js";
 import adminArrivalRoutes from "./routes/adminArrival.js";
 import adminShippingRoutes from "./routes/adminShipping.js";
 import adminProductRoutes from "./routes/adminProduct.js";
 import buyerOrderRoutes from "./routes/buyerOrder.js";
 
-/* ===== Services ===== */
-import {
-  getProducts,
-  updateProductStatus,
-  markProductClosed,
-  getBuyerOrders,
-  getShippingList,
-  markOrdersShipped,
-  getBuyerPendingOrders,
-  getProductsClosingTomorrow,
-  getBuyerPackingList
-} from "./services/sheetService.js";
+/* ===== LINE Webhook (測試重點) ===== */
+// 這裡同時支援 /webhook 和 /callback，防止你設錯
+app.post(["/webhook", "/callback"], (req, res) => {
+  console.log("========================================");
+  console.log("📢 收到 Webhook 請求！");
+  
+  const events = req.body.events;
 
-import { generateShippingPdf } from "./services/pdfService.js";
-import { generateBuyerPackingPdf } from "./services/buyerPackingPdfService.js";
-
-const app = express();
-app.use(express.json());
-
-/* ===== Static ===== */
-app.use(express.static(path.join(__dirname, "public")));
-app.use("/pdf", express.static(path.join(__dirname, "pdf")));
-
-/* ===== LINE Webhook ===== */
-app.post(
-  "/webhook",
-  line.middleware(lineConfig),
-  async (req, res) => {
-    const events = req.body.events;
-
-    for (const event of events) {
-      console.log(JSON.stringify(event, null, 2));
-    }
-
-    res.json({ success: true });
+  if (!events || events.length === 0) {
+    console.log("⚠️ 收到請求但沒有事件資料內容");
+  } else {
+    events.forEach((event, index) => {
+      console.log(`📍 事件 [${index + 1}]:`);
+      console.log(`   - 類型: ${event.type}`);
+      console.log(`   - 來源類型: ${event.source.type}`);
+      
+      // 如果是群組，印出 Group ID
+      if (event.source.type === 'group') {
+        console.log(`   - 🆔 群組 ID (GroupID): ${event.source.groupId}`);
+      }
+      
+      // 如果是個人私訊
+      if (event.source.type === 'user') {
+        console.log(`   - 👤 使用者 ID (UserID): ${event.source.userId}`);
+      }
+    });
   }
-);
+  console.log("========================================");
+  res.sendStatus(200); // 務必回傳 200 給 LINE
+});
 
-/* ===== Admin APIs ===== */
+/* ===== 其他 API (保留) ===== */
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminArrivalRoutes);
 app.use("/api/admin", adminShippingRoutes);
 app.use("/api/admin", adminProductRoutes);
-
-/* ===== Buyer APIs ===== */
 app.use("/api/buyer", buyerOrderRoutes);
+
+app.use(express.static(path.join(__dirname, "public")));
+app.use("/pdf", express.static(path.join(__dirname, "pdf")));
 
 /* ===== Server ===== */
 const PORT = process.env.PORT || 10000;
-
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 偵測機器人啟動成功，通訊埠： ${PORT}`);
 });
