@@ -25,9 +25,9 @@ export function getArrivalList() {
 }
 
 /**
- * 確認到貨
+ * 確認到貨 (對齊 adminArrival.js 的需求)
  */
-export async function confirmArrived(items) {
+export async function markArrived(items) {
   let orders = getAllOrders();
 
   items.forEach(item => {
@@ -55,14 +55,16 @@ export async function confirmArrived(items) {
     }
   });
 
-  // 同步廠商訂貨表（只剩未到貨）
   await syncVendorOrders(getAllOrders());
 }
 
-// 為了配合你 adminRoutes.js 的 import arrivedService from ...
-// 我們加上這個 default 匯出
-export const arrivedService = {
+// 別名導向，確保 confirmArrived 也能用
+export const confirmArrived = markArrived;
+
+// 預設匯出
+const arrivedService = {
   getArrivalList,
+  markArrived,
   confirmArrived
 };
 
