@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>商品列表</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body { font-family: sans-serif; padding: 12px; }
+.card {
+  border: 1px solid #ddd;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+button {
+  width: 100%;
+  padding: 8px;
+  margin-top: 6px;
+}
+</style>
+</head>
+<body>
+
+<h2>📦 商品列表</h2>
+<div id="list"></div>
+
+<script>
+async function loadProducts() {
+  const res = await fetch("/api/products");
+  const products = await res.json();
+
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  products.forEach(p => {
+    list.innerHTML += `
+      <div class="card">
+        <b>${p.productName}</b><br>
+        價格：NT$ ${p.price}<br>
+        <button onclick="detail('${p.productCode}')">查看詳情</button>
+      </div>
+    `;
+  });
+}
+
+function detail(code) {
+  location.href = `/liff/liff-admin-product-detail.html?productCode=${code}`;
+}
+
+loadProducts();
+</script>
+
+</body>
+</html>
