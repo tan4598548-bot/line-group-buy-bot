@@ -12,8 +12,13 @@ const router = express.Router();
    管理員：新增商品
 ========================= */
 router.post("/products/create", adminAuth, async (req, res) => {
-  await createProduct(req.body);
-  res.json({ ok: true });
+  try {
+    await createProduct(req.body);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Create Product Error:", error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 /* =========================

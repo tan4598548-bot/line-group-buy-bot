@@ -1,7 +1,8 @@
 import { 
   getProducts, 
   updateProductDetail, 
-  writeCell 
+  writeCell,
+  appendProduct // 確保從 sheetService 匯入此功能
 } from "./sheetService.js";
 
 /**
@@ -19,10 +20,21 @@ export async function updateProduct(productCode, data) {
 }
 
 /**
- * 新增商品
+ * 新增商品 (對應 liff-admin-product.html 的請求)
  */
 export async function createProduct(productData) {
-  console.log("Creating product:", productData);
+  console.log("🚀 正在寫入新商品到 Google Sheets:", productData);
+  
+  // 將前端傳來的欄位對齊 appendProduct 預期格式
+  const formattedData = {
+    productCode: `P${Date.now()}`, // 生成唯一代碼
+    productName: productData.name,
+    price: productData.price,
+    closeDate: productData.closeDate,
+    colorMap: productData.colorMap || "" // 包含顏色與尺寸的字串
+  };
+
+  return await appendProduct(formattedData);
 }
 
 /**
@@ -33,7 +45,7 @@ export async function updateProductStatus(productCode, isActive) {
   const p = products.find(p => p.productCode === productCode);
   if (!p) throw new Error("商品不存在");
   
-  // 假設 active 欄位在 E 欄
+  // 商品狀態位於 Products 工作表的 E 欄 (第 5 欄)
   await writeCell("Products", `E${p._row}`, isActive ? "TRUE" : "FALSE");
 }
 
@@ -50,7 +62,7 @@ export async function closeProduct(productCode) {
   const p = products.find(p => p.productCode === productCode);
   if (!p) throw new Error("商品不存在");
   
-  // 假設 closed 欄位在 H 欄
+  // 結單狀態位於 Products 工作表的 H 欄 (第 8 欄)
   await writeCell("Products", `H${p._row}`, "TRUE");
 }
 
