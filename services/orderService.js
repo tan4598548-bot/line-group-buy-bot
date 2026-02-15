@@ -6,20 +6,34 @@ import {
 } from "./sheetService.js";
 
 /**
- * 取得所有訂單 (供 arrivedService 使用)
+ * 取得所有訂單 (對齊 arrivedService 使用)
+ * 注意：因讀取 Sheet 是異步的，此處改為 async 確保能抓到真實資料
  */
-export function getAllOrders() {
-  // 注意：由於 Sheet 操作通常是異步的，這裡建議與 getOrders 配合
-  // 若要在記憶體操作，此處先定義介面供編譯通過
-  return []; 
+export async function getAllOrders() {
+  try {
+    return await getOrders();
+  } catch (error) {
+    console.error("取得訂單失敗:", error);
+    return [];
+  }
 }
 
-export function deleteOrder(index) {
-  console.log(`刪除第 ${index} 筆訂單`);
+/**
+ * 刪除訂單
+ * 實際上會根據行號 (index 或 _row) 去操作 Sheet
+ */
+export async function deleteOrder(index) {
+  // 這裡 index 建議傳入的是 Sheet 中的 row 編號
+  console.log(`正在刪除 Sheet 第 ${index} 列訂單`);
+  await writeCell("Orders", `I${index}`, "deleted"); // 範例：將狀態改為已刪除
 }
 
-export function editOrder(index, data) {
-  console.log(`修改第 ${index} 筆訂單`, data);
+/**
+ * 修改訂單
+ */
+export async function editOrder(index, data) {
+  console.log(`正在修改 Sheet 第 ${index} 列訂單`, data);
+  // 根據 data 內容更新對應欄位，此處為介面實作
 }
 
 /**
@@ -44,6 +58,7 @@ export async function handleOrder(req, res) {
       throw new Error("商品不存在");
     }
 
+    // 檢查結單與上架狀態 (相容字串與布林值)
     if (product.closed === "TRUE" || product.closed === true) {
       throw new Error("此商品已結單，無法下單");
     }
@@ -71,6 +86,7 @@ export async function handleOrder(req, res) {
       createdAt: new Date().toISOString()
     };
 
+    // 呼叫 sheetService 的寫入功能
     await appendOrder(order);
 
     res.json({
@@ -87,10 +103,11 @@ export async function handleOrder(req, res) {
   }
 }
 
-// 預設匯出以配合其他模組引用
-export default {
+// 預設匯出以配合 adminRoutes 或其他模組引用
+const orderService = {
   handleOrder,
   getAllOrders,
   deleteOrder,
   editOrder
 };
+export default orderService;

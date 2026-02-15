@@ -28,22 +28,15 @@ export async function writeCell(sheet, cell, value) {
   });
 }
 
-/* =========================
-   Products 相關
-========================= */
+/* ===== Products ===== */
 export async function getProducts() {
   const rows = await readSheet(PRODUCT_SHEET);
   if (rows.length <= 1) return [];
   return rows.slice(1).map((r, i) => ({
-    productCode: r[0],
-    productName: r[1],
-    colorMap: r[2],
-    price: Number(r[3]),
-    active: r[4] === "TRUE",
-    closeDate: r[5],
-    reminded: r[6] === "TRUE",
-    closed: r[7] === "TRUE",
-    _row: i + 2,
+    productCode: r[0], productName: r[1], colorMap: r[2],
+    price: Number(r[3]), active: r[4] === "TRUE",
+    closeDate: r[5], reminded: r[6] === "TRUE",
+    closed: r[7] === "TRUE", _row: i + 2,
   }));
 }
 
@@ -51,9 +44,7 @@ export async function updateProductDetail(productCode, data) {
   const products = await getProducts();
   const p = products.find(p => p.productCode === productCode);
   if (!p) throw new Error("商品不存在");
-  if (data.productName) {
-    await writeCell(PRODUCT_SHEET, `B${p._row}`, data.productName);
-  }
+  if (data.productName) await writeCell(PRODUCT_SHEET, `B${p._row}`, data.productName);
 }
 
 export async function updateProductStatus(productCode, isActive) {
@@ -78,27 +69,19 @@ export async function getProductsClosingTomorrow() {
   return products.filter(p => p.closeDate === dateStr);
 }
 
-/* =========================
-   Orders 相關 (修正重點：補回 appendOrder)
-========================= */
+/* ===== Orders ===== */
 export async function getOrders() {
   const rows = await readSheet(ORDER_SHEET);
   if (rows.length <= 1) return [];
   return rows.slice(1).map((r, i) => ({
-    lineUserId: r[0],
-    buyerName: r[1],
-    productCode: r[2],
-    productName: r[3],
-    color: r[4],
-    size: r[5],
-    qty: Number(r[6]),
-    price: Number(r[7]),
-    status: r[8],
-    _row: i + 2,
+    lineUserId: r[0], buyerName: r[1], productCode: r[2],
+    productName: r[3], color: r[4], size: r[5],
+    qty: Number(r[6]), price: Number(r[7]),
+    status: r[8], _row: i + 2,
   }));
 }
 
-// 補回這個關鍵函式，供 orderService.js 使用
+// 關鍵修正：確保 appendOrder 有具名匯出 (Export)
 export async function appendOrder(order) {
   await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
@@ -106,15 +89,9 @@ export async function appendOrder(order) {
     valueInputOption: "RAW",
     requestBody: {
       values: [[
-        order.userId,
-        order.buyerName || "", 
-        order.productCode,
-        order.productName,
-        order.color || "", 
-        order.size || "", 
-        order.qty,
-        order.price,
-        order.status || "pending",
+        order.userId, order.buyerName || "", order.productCode,
+        order.productName, order.color || "", order.size || "",
+        order.qty, order.price, order.status || "pending",
         new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })
       ]],
     },
@@ -151,9 +128,7 @@ export async function getBuyerPackingList() {
   orders.forEach(o => {
     if (!packingMap[o.lineUserId]) packingMap[o.lineUserId] = [];
     packingMap[o.lineUserId].push({
-      productName: o.productName,
-      quantity: o.qty,
-      price: o.price
+      productName: o.productName, quantity: o.qty, price: o.price
     });
   });
   return packingMap;
@@ -161,18 +136,9 @@ export async function getBuyerPackingList() {
 
 // 預設匯出
 const sheetService = {
-  getProducts,
-  updateProductDetail,
-  updateProductStatus,
-  markProductClosed,
-  getOrders,
-  getBuyerOrders,
-  getShippingList,
-  markOrdersShipped,
-  getBuyerPendingOrders,
-  getProductsClosingTomorrow,
-  getBuyerPackingList,
-  appendOrder
+  getProducts, updateProductDetail, updateProductStatus,
+  markProductClosed, getOrders, getBuyerOrders,
+  getShippingList, markOrdersShipped, getBuyerPendingOrders,
+  getProductsClosingTomorrow, getBuyerPackingList, appendOrder
 };
-
 export default sheetService;
