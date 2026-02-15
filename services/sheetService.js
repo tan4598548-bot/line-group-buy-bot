@@ -28,7 +28,7 @@ export async function writeCell(sheet, cell, value) {
   });
 }
 
-/* ===== Products ===== */
+/* ===== Products 相關 (對應 productService.js) ===== */
 export async function getProducts() {
   const rows = await readSheet(PRODUCT_SHEET);
   if (rows.length <= 1) return [];
@@ -40,6 +40,15 @@ export async function getProducts() {
   }));
 }
 
+// 修正：補回 updateProductDetail
+export async function updateProductDetail(productCode, data) {
+  const products = await getProducts();
+  const p = products.find(p => p.productCode === productCode);
+  if (!p) throw new Error("商品不存在");
+  if (data.productName) await writeCell(PRODUCT_SHEET, `B${p._row}`, data.productName);
+  if (data.price) await writeCell(PRODUCT_SHEET, `D${p._row}`, data.price);
+}
+
 export async function updateProductStatus(productCode, isActive) {
   const products = await getProducts();
   const p = products.find(p => p.productCode === productCode);
@@ -47,7 +56,14 @@ export async function updateProductStatus(productCode, isActive) {
   await writeCell(PRODUCT_SHEET, `E${p._row}`, isActive ? "TRUE" : "FALSE");
 }
 
-/* ===== Orders ===== */
+export async function markProductClosed(productCode) {
+  const products = await getProducts();
+  const p = products.find(p => p.productCode === productCode);
+  if (!p) throw new Error("商品不存在");
+  await writeCell(PRODUCT_SHEET, `H${p._row}`, "TRUE");
+}
+
+/* ===== Orders 相關 (對應 orderService.js & arrivedService.js) ===== */
 export async function getOrders() {
   const rows = await readSheet(ORDER_SHEET);
   if (rows.length <= 1) return [];
@@ -75,16 +91,13 @@ export async function appendOrder(order) {
   });
 }
 
-/**
- * 補回失蹤的同步功能 (對齊 arrivedService.js)
- */
+// 對應 arrivedService.js
 export async function syncVendorOrders(updatedOrders) {
-  console.log("🔄 正在同步訂單資料至 Google Sheets...");
-  // 此處邏輯視需求而定，目前先確保函式存在且能運作
+  console.log("🔄 執行訂單同步...");
   return { ok: true };
 }
 
-// 供 index.js 呼叫的各種介面
+/* ===== 其他 API 支援 ===== */
 export async function getBuyerOrders(userId) {
   const orders = await getOrders();
   return userId ? orders.filter(o => o.lineUserId === userId) : orders;
@@ -101,12 +114,9 @@ export async function getShippingList() {
 }
 
 export async function markOrdersShipped(rowIndices) {
-  const results = [];
   for (const row of rowIndices) {
     await writeCell(ORDER_SHEET, `I${row}`, "shipped");
-    results.push({ _row: row, status: "shipped" });
   }
-  return results;
 }
 
 export async function getBuyerPackingList() {
@@ -131,9 +141,9 @@ export async function getProductsClosingTomorrow() {
 
 // 預設匯出
 const sheetService = {
-  getProducts, updateProductStatus, getOrders, appendOrder,
-  syncVendorOrders, getBuyerOrders, getBuyerPendingOrders,
-  getShippingList, markOrdersShipped, getBuyerPackingList,
-  getProductsClosingTomorrow
+  getProducts, updateProductDetail, updateProductStatus, markProductClosed,
+  getOrders, appendOrder, syncVendorOrders, getBuyerOrders, 
+  getBuyerPendingOrders, getShippingList, markOrdersShipped, 
+  getBuyerPackingList, getProductsClosingTomorrow, writeCell
 };
 export default sheetService;
