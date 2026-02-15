@@ -54,6 +54,13 @@ export async function updateProductStatus(productCode, isActive) {
   await writeCell(PRODUCT_SHEET, `E${p._row}`, isActive ? "TRUE" : "FALSE");
 }
 
+export async function markProductClosed(productCode) {
+  const products = await getProducts();
+  const p = products.find(p => p.productCode === productCode);
+  if (!p) throw new Error("商品不存在");
+  await writeCell(PRODUCT_SHEET, `H${p._row}`, "TRUE");
+}
+
 /* ===== Orders 相關 ===== */
 export async function getOrders() {
   const rows = await readSheet(ORDER_SHEET);
@@ -64,12 +71,6 @@ export async function getOrders() {
     qty: Number(r[6]), price: Number(r[7]),
     status: r[8], _row: i + 2,
   }));
-}
-
-// 供 shippingService.js 呼叫的名稱 (修正重點)
-export async function getPendingOrders() {
-  const orders = await getOrders();
-  return orders.filter(o => o.status === "pending");
 }
 
 export async function appendOrder(order) {
@@ -88,35 +89,71 @@ export async function appendOrder(order) {
   });
 }
 
+// 供 arrivedService.js 呼叫
 export async function syncVendorOrders(updatedOrders) {
   console.log("🔄 執行訂單同步...");
   return { ok: true };
 }
 
-/* ===== API 支援功能 ===== */
+/* ===== index.js 需要的各類清單功能 ===== */
+
+// 1. 取得特定買家訂單
 export async function getBuyerOrders(userId) {
   const orders = await getOrders();
   return userId ? orders.filter(o => o.lineUserId === userId) : orders;
 }
 
-export async function getBuyerPendingOrders(userId) {
-  return await getPendingOrders();
+// 2. 取得待出貨清單 (供 shippingService 使用)
+export async function getPendingOrders() {
+  const orders = await getOrders();
+  return orders.filter(o => o.status === "pending");
 }
 
+// 3. 供 index.js 的 /api/admin/shipping-list 呼叫
 export async function getShippingList() {
   return await getPendingOrders();
 }
 
+// 4. 供 index.js 的 /api/buyer/pending 呼叫
+export async function getBuyerPendingOrders(userId) {
+  const orders = await getBuyerOrders(userId);
+  return orders.filter(o => o.status === "pending");
+}
+
+// 5. 修正重點：具名匯出 getBuyerPackingList
+export async function getBuyerPackingList() {
+  const orders = await getOrders();
+  const packingMap = {};
+  orders.forEach(o => {
+    if (!packingMap[o.lineUserId]) packingMap[o.lineUserId] = [];
+    packingMap[o.lineUserId].push({
+      productName: o.productName, quantity: o.qty, price: o.price
+    });
+  });
+  return packingMap;
+}
+
+// 6. 標記已出貨
 export async function markOrdersShipped(rowIndices) {
   for (const row of rowIndices) {
     await writeCell(ORDER_SHEET, `I${row}`, "shipped");
   }
 }
 
+// 7. 結單提醒
+export async function getProductsClosingTomorrow() {
+  const products = await getProducts();
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dateStr = tomorrow.toISOString().split('T')[0];
+  return products.filter(p => p.closeDate === dateStr);
+}
+
 // 預設匯出
 const sheetService = {
-  getProducts, updateProductDetail, updateProductStatus,
+  getProducts, updateProductDetail, updateProductStatus, markProductClosed,
   getOrders, getPendingOrders, appendOrder, syncVendorOrders,
-  getBuyerOrders, getBuyerPendingOrders, getShippingList, markOrdersShipped
+  getBuyerOrders, getBuyerPendingOrders, getShippingList, markOrdersShipped,
+  getBuyerPackingList, getProductsClosingTomorrow, writeCell
 };
 export default sheetService;
