@@ -30,7 +30,7 @@ import {
 
 import { generateShippingPdf } from "./services/pdfService.js";
 import { generateBuyerPackingPdf } from "./services/buyerPackingPdfService.js";
-
+app.use("/liff", express.static(path.join(__dirname, "public/liff")));
 /* ===== App Setup ===== */
 const app = express();
 app.use(express.json());
