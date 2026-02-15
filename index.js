@@ -36,15 +36,14 @@ const app = express();
 app.use(express.json());
 
 /* =====================
-   靜態資料夾與 LIFF 路徑修正
-   確保 /liff 路由能精準對應到 public/liff 目錄
+   靜態資料夾與 LIFF 路徑
 ===================== */
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/liff", express.static(path.join(__dirname, "public/liff")));
 app.use("/pdf", express.static(path.join(__dirname, "public/pdf")));
 
 /* =====================
-   核心 Webhook：抓取 GroupID
+   Webhook：抓 GroupID
 ===================== */
 app.post("/webhook", (req, res) => {
   console.log("📥 Webhook Event Received:");
@@ -52,12 +51,13 @@ app.post("/webhook", (req, res) => {
   if (events && events.length > 0) {
     events.forEach(event => {
       const source = event.source;
-      if (source.type === 'group') {
-        console.log(`🆔 【群組訊息】GroupID: ${source.groupId}`);
-      } else if (source.type === 'user') {
-        console.log(`👤 【個人訊息】UserID: ${source.userId}`);
+      if (source?.type === "group") {
+        console.log(`🆔 GroupID: ${source.groupId}`);
+      } else if (source?.type === "user") {
+        console.log(`👤 UserID: ${source.userId}`);
       }
-      if (event.message && event.message.type === 'text') {
+
+      if (event.message?.type === "text") {
         console.log(`💬 內容: ${event.message.text}`);
       }
     });
@@ -83,6 +83,8 @@ app.use("/api/buyer", buyerOrderRoutes);
 /* =====================
    商品管理 API
 ===================== */
+
+/* 取得所有商品 */
 app.get("/api/products", async (req, res) => {
   try {
     const data = await getProducts();
@@ -92,6 +94,21 @@ app.get("/api/products", async (req, res) => {
   }
 });
 
+/* 商品詳細（新增） */
+app.get("/api/product-detail/:code", async (req, res) => {
+  try {
+    const list = await getProducts();
+    const product = list.find(p => p.productCode === req.params.code);
+    if (!product) {
+      return res.status(404).json({ error: "找不到商品" });
+    }
+    res.json(product);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* 上下架 */
 app.post("/api/product/active", async (req, res) => {
   try {
     const { productCode, active } = req.body;
@@ -102,6 +119,7 @@ app.post("/api/product/active", async (req, res) => {
   }
 });
 
+/* 結單 */
 app.post("/api/product/close", async (req, res) => {
   try {
     const { productCode } = req.body;
@@ -113,8 +131,9 @@ app.post("/api/product/close", async (req, res) => {
 });
 
 /* =====================
-   買家訂單與出貨 API
+   買家訂單 API
 ===================== */
+
 app.get("/api/buyer/orders", async (req, res) => {
   try {
     res.json(await getBuyerOrders(req.query.userId));
@@ -131,6 +150,10 @@ app.get("/api/buyer/pending", async (req, res) => {
   }
 });
 
+/* =====================
+   出貨 API
+===================== */
+
 app.get("/api/admin/shipping-list", async (req, res) => {
   try {
     res.json(await getShippingList());
@@ -142,42 +165,63 @@ app.get("/api/admin/shipping-list", async (req, res) => {
 app.post("/api/admin/ship", async (req, res) => {
   try {
     const { orderIds } = req.body;
-    if (!orderIds?.length) return res.status(400).json({ error: "未選擇出貨項目" });
+    if (!orderIds?.length)
+      return res.status(400).json({ error: "未選擇出貨項目" });
+
     const shippedData = await markOrdersShipped(orderIds);
     const pdfPath = await generateShippingPdf(shippedData);
-    res.json({ ok: true, pdfUrl: `/pdf/${path.basename(pdfPath)}` });
+
+    res.json({
+      ok: true,
+      pdfUrl: `/pdf/${path.basename(pdfPath)}`
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
+/* 買家打包 PDF */
 app.get("/api/admin/buyer-packing-pdf", async (req, res) => {
   try {
     const list = await getBuyerPackingList();
-    if (!list || Object.keys(list).length === 0) return res.status(400).json({ error: "無資料" });
+    if (!list || Object.keys(list).length === 0)
+      return res.status(400).json({ error: "無資料" });
+
     const pdfPath = await generateBuyerPackingPdf(list);
-    res.json({ ok: true, pdfUrl: `/pdf/${path.basename(pdfPath)}` });
+
+    res.json({
+      ok: true,
+      pdfUrl: `/pdf/${path.basename(pdfPath)}`
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
+/* 結單提醒 */
 app.get("/api/admin/close-reminder", async (req, res) => {
   try {
     const products = await getProductsClosingTomorrow();
-    if (!products.length) return res.json({ text: "明日無結單商品" });
-    const list = products.map((p, i) => `${i + 1}. ${p.productName}`).join("\n");
-    res.json({ text: `⚠️【結單提醒】\n\n${list}\n\n請盡速下單` });
+    if (!products.length)
+      return res.json({ text: "明日無結單商品" });
+
+    const list = products
+      .map((p, i) => `${i + 1}. ${p.productName}`)
+      .join("\n");
+
+    res.json({
+      text: `⚠️【結單提醒】\n\n${list}\n\n請盡速下單`
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
 /* =====================
-   404 & Error Handling
+   404
 ===================== */
 app.use((req, res) => {
-  res.status(404).send("404 Not Found - 頁面不存在，請檢查網址是否有 /liff/");
+  res.status(404).send("404 Not Found - 請確認是否加上 /liff/");
 });
 
 /* =====================
