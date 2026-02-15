@@ -28,7 +28,7 @@ export async function writeCell(sheet, cell, value) {
   });
 }
 
-/* ===== Products 相關 (對應 productService.js) ===== */
+/* ===== Products 相關 ===== */
 export async function getProducts() {
   const rows = await readSheet(PRODUCT_SHEET);
   if (rows.length <= 1) return [];
@@ -40,13 +40,11 @@ export async function getProducts() {
   }));
 }
 
-// 修正：補回 updateProductDetail
 export async function updateProductDetail(productCode, data) {
   const products = await getProducts();
   const p = products.find(p => p.productCode === productCode);
   if (!p) throw new Error("商品不存在");
   if (data.productName) await writeCell(PRODUCT_SHEET, `B${p._row}`, data.productName);
-  if (data.price) await writeCell(PRODUCT_SHEET, `D${p._row}`, data.price);
 }
 
 export async function updateProductStatus(productCode, isActive) {
@@ -56,14 +54,7 @@ export async function updateProductStatus(productCode, isActive) {
   await writeCell(PRODUCT_SHEET, `E${p._row}`, isActive ? "TRUE" : "FALSE");
 }
 
-export async function markProductClosed(productCode) {
-  const products = await getProducts();
-  const p = products.find(p => p.productCode === productCode);
-  if (!p) throw new Error("商品不存在");
-  await writeCell(PRODUCT_SHEET, `H${p._row}`, "TRUE");
-}
-
-/* ===== Orders 相關 (對應 orderService.js & arrivedService.js) ===== */
+/* ===== Orders 相關 ===== */
 export async function getOrders() {
   const rows = await readSheet(ORDER_SHEET);
   if (rows.length <= 1) return [];
@@ -73,6 +64,12 @@ export async function getOrders() {
     qty: Number(r[6]), price: Number(r[7]),
     status: r[8], _row: i + 2,
   }));
+}
+
+// 供 shippingService.js 呼叫的名稱 (修正重點)
+export async function getPendingOrders() {
+  const orders = await getOrders();
+  return orders.filter(o => o.status === "pending");
 }
 
 export async function appendOrder(order) {
@@ -91,26 +88,23 @@ export async function appendOrder(order) {
   });
 }
 
-// 對應 arrivedService.js
 export async function syncVendorOrders(updatedOrders) {
   console.log("🔄 執行訂單同步...");
   return { ok: true };
 }
 
-/* ===== 其他 API 支援 ===== */
+/* ===== API 支援功能 ===== */
 export async function getBuyerOrders(userId) {
   const orders = await getOrders();
   return userId ? orders.filter(o => o.lineUserId === userId) : orders;
 }
 
 export async function getBuyerPendingOrders(userId) {
-  const orders = await getBuyerOrders(userId);
-  return orders.filter(o => o.status === "pending");
+  return await getPendingOrders();
 }
 
 export async function getShippingList() {
-  const orders = await getOrders();
-  return orders.filter(o => o.status === "pending");
+  return await getPendingOrders();
 }
 
 export async function markOrdersShipped(rowIndices) {
@@ -119,31 +113,10 @@ export async function markOrdersShipped(rowIndices) {
   }
 }
 
-export async function getBuyerPackingList() {
-  const orders = await getOrders();
-  const packingMap = {};
-  orders.forEach(o => {
-    if (!packingMap[o.lineUserId]) packingMap[o.lineUserId] = [];
-    packingMap[o.lineUserId].push({
-      productName: o.productName, quantity: o.qty, price: o.price
-    });
-  });
-  return packingMap;
-}
-
-export async function getProductsClosingTomorrow() {
-  const products = await getProducts();
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const dateStr = tomorrow.toISOString().split('T')[0];
-  return products.filter(p => p.closeDate === dateStr);
-}
-
 // 預設匯出
 const sheetService = {
-  getProducts, updateProductDetail, updateProductStatus, markProductClosed,
-  getOrders, appendOrder, syncVendorOrders, getBuyerOrders, 
-  getBuyerPendingOrders, getShippingList, markOrdersShipped, 
-  getBuyerPackingList, getProductsClosingTomorrow, writeCell
+  getProducts, updateProductDetail, updateProductStatus,
+  getOrders, getPendingOrders, appendOrder, syncVendorOrders,
+  getBuyerOrders, getBuyerPendingOrders, getShippingList, markOrdersShipped
 };
 export default sheetService;
