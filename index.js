@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /* ===== Routes ===== */
+import adminAuth from "./services/lineBotService.js"; // 引入權限驗證中間層
 import adminRoutes from "./routes/adminRoutes.js";
 import adminArrivalRoutes from "./routes/adminArrival.js";
 import adminShippingRoutes from "./routes/adminShipping.js";
@@ -74,25 +75,25 @@ app.post("/webhook", (req, res) => {
 });
 
 /* =====================
-   管理員 API
+   管理員 API (全部套用 adminAuth 驗證)
 ===================== */
-app.use("/api/admin", adminRoutes);
-app.use("/api/admin", adminArrivalRoutes);
-app.use("/api/admin", adminShippingRoutes);
-app.use("/api/admin", adminProductRoutes);
-app.use("/api/admin/overstock", adminOverstockRoutes);
-app.use("/api/admin/overstock", adminOverstockStatsRoutes);
+app.use("/api/admin", adminAuth, adminRoutes);
+app.use("/api/admin", adminAuth, adminArrivalRoutes);
+app.use("/api/admin", adminAuth, adminShippingRoutes);
+app.use("/api/admin", adminAuth, adminProductRoutes);
+app.use("/api/admin/overstock", adminAuth, adminOverstockRoutes);
+app.use("/api/admin/overstock", adminAuth, adminOverstockStatsRoutes);
 
 /* =====================
-   買家 API
+   買家 API (公開，不需驗證)
 ===================== */
 app.use("/api/buyer", buyerOrderRoutes);
 
 /* =====================
-   商品管理 API
+   商品管理 API (混合驗證)
 ===================== */
 
-/* 取得所有商品 */
+/* 取得所有商品 - 買家也會用到，所以不加 adminAuth */
 app.get("/api/products", async (req, res) => {
   try {
     const data = await getProducts();
@@ -102,7 +103,7 @@ app.get("/api/products", async (req, res) => {
   }
 });
 
-/* 商品詳細 */
+/* 商品詳細 - 買家也會用到，所以不加 adminAuth */
 app.get("/api/product-detail/:code", async (req, res) => {
   try {
     const list = await getProducts();
@@ -114,8 +115,8 @@ app.get("/api/product-detail/:code", async (req, res) => {
   }
 });
 
-/* 上下架 */
-app.post("/api/product/active", async (req, res) => {
+/* 上下架 - 需要管理權限 */
+app.post("/api/product/active", adminAuth, async (req, res) => {
   try {
     const { productCode, active } = req.body;
     await updateProductStatus(productCode, active);
@@ -125,8 +126,8 @@ app.post("/api/product/active", async (req, res) => {
   }
 });
 
-/* 結單 */
-app.post("/api/product/close", async (req, res) => {
+/* 結單 - 需要管理權限 */
+app.post("/api/product/close", adminAuth, async (req, res) => {
   try {
     const { productCode } = req.body;
     await markProductClosed(productCode);
@@ -156,9 +157,9 @@ app.get("/api/buyer/pending", async (req, res) => {
 });
 
 /* =====================
-   出貨 API
+   出貨 API (管理員專用)
 ===================== */
-app.get("/api/admin/shipping-list", async (req, res) => {
+app.get("/api/admin/shipping-list", adminAuth, async (req, res) => {
   try {
     res.json(await getShippingList());
   } catch (e) {
@@ -166,7 +167,7 @@ app.get("/api/admin/shipping-list", async (req, res) => {
   }
 });
 
-app.post("/api/admin/ship", async (req, res) => {
+app.post("/api/admin/ship", adminAuth, async (req, res) => {
   try {
     const { orderIds } = req.body;
     if (!orderIds?.length) return res.status(400).json({ error: "未選擇出貨項目" });
@@ -183,8 +184,8 @@ app.post("/api/admin/ship", async (req, res) => {
   }
 });
 
-/* 買家打包 PDF */
-app.get("/api/admin/buyer-packing-pdf", async (req, res) => {
+/* 買家打包 PDF (管理員專用) */
+app.get("/api/admin/buyer-packing-pdf", adminAuth, async (req, res) => {
   try {
     const list = await getBuyerPackingList();
     if (!list || Object.keys(list).length === 0) return res.status(400).json({ error: "無資料" });
@@ -199,8 +200,8 @@ app.get("/api/admin/buyer-packing-pdf", async (req, res) => {
   }
 });
 
-/* 結單提醒 */
-app.get("/api/admin/close-reminder", async (req, res) => {
+/* 結單提醒 (管理員專用) */
+app.get("/api/admin/close-reminder", adminAuth, async (req, res) => {
   try {
     const products = await getProductsClosingTomorrow();
     if (!products.length) return res.json({ text: "明日無結單商品" });
