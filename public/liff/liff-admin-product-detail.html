@@ -1,58 +1,79 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<meta charset="UTF-8">
-<title>商品詳情</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-<style>
-body { font-family: sans-serif; padding: 12px; }
-img { width: 100%; border-radius: 8px; margin-bottom: 8px; }
-select, button { width: 100%; padding: 10px; margin-top: 8px; }
-.price { font-size: 20px; color: #d32f2f; font-weight: bold; }
-</style>
+  <meta charset="UTF-8">
+  <title>商品管理詳情</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: system-ui; padding: 16px; line-height: 1.6; }
+    .container { max-width: 500px; margin: 0 auto; }
+    .price { font-size: 24px; color: #d32f2f; font-weight: bold; margin: 10px 0; }
+    .info-box { background: #f4f4f4; padding: 12px; border-radius: 8px; margin: 10px 0; }
+    button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .btn-back { background: #666; color: white; }
+    .btn-close { background: #d32f2f; color: white; }
+  </style>
 </head>
 <body>
 
-<h2 id="name"></h2>
-<div class="price" id="price"></div>
-<div id="images"></div>
-<pre id="detail"></pre>
+<div class="container">
+  <h2 id="name">載入中...</h2>
+  <div class="price" id="price"></div>
+  
+  <div class="info-box">
+    <strong>商品代碼：</strong> <span id="code"></span><br>
+    <strong>結單日期：</strong> <span id="closeDate"></span><br>
+    <strong>規格資訊：</strong> <br>
+    <div id="colorMap" style="margin-top:5px; color:#555;"></div>
+  </div>
+
+  <button class="btn-back" onclick="history.back()">⬅️ 返回列表</button>
+</div>
 
 <script>
-let product = {};
+  let product = {};
 
-function qs(name) {
-  return new URLSearchParams(location.search).get(name);
-}
-
-async function init() {
-  await liff.init({ liffId: "2008857998-ZNTmhd33" });
-
-  if (!liff.isLoggedIn()) {
-    liff.login();
-    return;
+  function qs(name) {
+    return new URLSearchParams(location.search).get(name);
   }
 
-  const code = qs("productCode");
-  const res = await fetch(`/api/product-detail/${code}`);
-  product = await res.json();
+  async function init() {
+    try {
+      // 請確認此 LIFF ID 是否正確，建議與 dashboard 使用同一個 ID 或確保該 ID 已設定
+      await liff.init({ liffId: "2008857998-AoqmEajq" }); 
 
-  render();
-}
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
 
-function render() {
-  document.getElementById("name").innerText = product.productName;
-  document.getElementById("price").innerText = "NT$ " + product.price;
-  document.getElementById("detail").innerText = product.detailText || "";
+      const code = qs("productCode");
+      if (!code) {
+        alert("缺少商品代碼");
+        return;
+      }
 
-  if (product.images) {
-    document.getElementById("images").innerHTML =
-      product.images.map(i => `<img src="${i}">`).join("");
+      // 修正：對齊 adminproduct.js 定義的 /api/admin/product-detail/:code
+      const res = await fetch(`/api/admin/product-detail/${code}`);
+      if (!res.ok) throw new Error("找不到商品資料");
+      
+      product = await res.json();
+      render();
+    } catch (err) {
+      document.getElementById("name").innerText = "錯誤：" + err.message;
+    }
   }
-}
 
-init();
+  function render() {
+    document.getElementById("name").innerText = product.productName;
+    document.getElementById("price").innerText = "NT$ " + product.price;
+    document.getElementById("code").innerText = product.productCode;
+    document.getElementById("closeDate").innerText = product.closeDate || "未設定";
+    document.getElementById("colorMap").innerText = product.colorMap || "無規格資訊";
+  }
+
+  init();
 </script>
 
 </body>
