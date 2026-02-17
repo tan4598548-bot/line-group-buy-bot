@@ -1,3 +1,3 @@
 export const ADMIN_USER_IDS = [
-  "idiotone,sytkuo" // 你的 LINE userId
+  "U7e17a718ecb70716d376fc82ac8b2a19" // 你的 LINE userId
 ];

@@ -31,7 +31,6 @@ import {
 import { generateShippingPdf } from "./services/pdfService.js";
 import { generateBuyerPackingPdf } from "./services/buyerPackingPdfService.js";
 
-/* ===== App Setup ===== */
 const app = express();
 app.use(express.json());
 
@@ -43,23 +42,32 @@ app.use("/liff", express.static(path.join(__dirname, "public/liff")));
 app.use("/pdf", express.static(path.join(__dirname, "public/pdf")));
 
 /* =====================
-   Webhook：抓 GroupID
+   Webhook：精準抓取 ID
 ===================== */
 app.post("/webhook", (req, res) => {
-  console.log("📥 Webhook Event Received:");
   const events = req.body.events;
   if (events && events.length > 0) {
     events.forEach(event => {
       const source = event.source;
-      if (source?.type === "group") {
+      const msg = event.message;
+
+      console.log("-----------------------------------------");
+      console.log(`📅 Time: ${new Date().toLocaleString("zh-TW", {timeZone: "Asia/Taipei"})}`);
+      
+      // 偵測來源類型
+      if (source.type === "group") {
+        console.log(`📍 [GROUP EVENT]`);
         console.log(`🆔 GroupID: ${source.groupId}`);
-      } else if (source?.type === "user") {
-        console.log(`👤 UserID: ${source.userId}`);
+        console.log(`👤 UserID:  ${source.userId || "Unknown (User must follow Bot)"}`);
+      } else if (source.type === "user") {
+        console.log(`📍 [PERSONAL EVENT]`);
+        console.log(`👤 UserID:  ${source.userId}`);
       }
 
-      if (event.message?.type === "text") {
-        console.log(`💬 內容: ${event.message.text}`);
+      if (msg?.type === "text") {
+        console.log(`💬 Message: ${msg.text}`);
       }
+      console.log("-----------------------------------------");
     });
   }
   res.sendStatus(200);
@@ -94,14 +102,12 @@ app.get("/api/products", async (req, res) => {
   }
 });
 
-/* 商品詳細（新增） */
+/* 商品詳細 */
 app.get("/api/product-detail/:code", async (req, res) => {
   try {
     const list = await getProducts();
     const product = list.find(p => p.productCode === req.params.code);
-    if (!product) {
-      return res.status(404).json({ error: "找不到商品" });
-    }
+    if (!product) return res.status(404).json({ error: "找不到商品" });
     res.json(product);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -133,7 +139,6 @@ app.post("/api/product/close", async (req, res) => {
 /* =====================
    買家訂單 API
 ===================== */
-
 app.get("/api/buyer/orders", async (req, res) => {
   try {
     res.json(await getBuyerOrders(req.query.userId));
@@ -153,7 +158,6 @@ app.get("/api/buyer/pending", async (req, res) => {
 /* =====================
    出貨 API
 ===================== */
-
 app.get("/api/admin/shipping-list", async (req, res) => {
   try {
     res.json(await getShippingList());
@@ -165,8 +169,7 @@ app.get("/api/admin/shipping-list", async (req, res) => {
 app.post("/api/admin/ship", async (req, res) => {
   try {
     const { orderIds } = req.body;
-    if (!orderIds?.length)
-      return res.status(400).json({ error: "未選擇出貨項目" });
+    if (!orderIds?.length) return res.status(400).json({ error: "未選擇出貨項目" });
 
     const shippedData = await markOrdersShipped(orderIds);
     const pdfPath = await generateShippingPdf(shippedData);
@@ -184,11 +187,9 @@ app.post("/api/admin/ship", async (req, res) => {
 app.get("/api/admin/buyer-packing-pdf", async (req, res) => {
   try {
     const list = await getBuyerPackingList();
-    if (!list || Object.keys(list).length === 0)
-      return res.status(400).json({ error: "無資料" });
+    if (!list || Object.keys(list).length === 0) return res.status(400).json({ error: "無資料" });
 
     const pdfPath = await generateBuyerPackingPdf(list);
-
     res.json({
       ok: true,
       pdfUrl: `/pdf/${path.basename(pdfPath)}`
@@ -202,31 +203,19 @@ app.get("/api/admin/buyer-packing-pdf", async (req, res) => {
 app.get("/api/admin/close-reminder", async (req, res) => {
   try {
     const products = await getProductsClosingTomorrow();
-    if (!products.length)
-      return res.json({ text: "明日無結單商品" });
+    if (!products.length) return res.json({ text: "明日無結單商品" });
 
-    const list = products
-      .map((p, i) => `${i + 1}. ${p.productName}`)
-      .join("\n");
-
-    res.json({
-      text: `⚠️【結單提醒】\n\n${list}\n\n請盡速下單`
-    });
+    const list = products.map((p, i) => `${i + 1}. ${p.productName}`).join("\n");
+    res.json({ text: `⚠️【結單提醒】\n\n${list}\n\n請盡速下單` });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-/* =====================
-   404
-===================== */
 app.use((req, res) => {
-  res.status(404).send("404 Not Found - 請確認是否加上 /liff/");
+  res.status(404).send("404 Not Found - 請確認路徑是否正確");
 });
 
-/* =====================
-   Start Server
-===================== */
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
