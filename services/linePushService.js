@@ -1,6 +1,18 @@
-import { pushMessage } from "./lineClient.js";
+import axios from "axios";
 
-export async function sendCloseReminder(groupId, productList) {
-  const text = `⚠️【明日結單提醒】\n\n${productList}`;
-  await pushMessage(groupId, text);
+const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+
+export async function sendPush(to, messages) {
+  try {
+    await axios.post("https://api.line.me/v2/bot/message/push", {
+      to,
+      messages: Array.isArray(messages) ? messages : [{ type: "text", text: messages }]
+    }, {
+      headers: { "Authorization": `Bearer ${LINE_TOKEN}`, "Content-Type": "application/json" }
+    });
+  } catch (e) {
+    console.error("Line Push 失敗:", e.response?.data);
+  }
 }
+
+export default { sendPush };

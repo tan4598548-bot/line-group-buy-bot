@@ -1,47 +1,46 @@
-const orderService = require('./orderService');
-const productService = require('./productService');
-const sheetService = require('./sheetService');
+import sheetService from "./sheetService.js";
+import pdfService from "./pdfService.js";
 
 /**
- * 產生廠商訂貨彙總
+ * 產生廠商訂貨彙總 (對齊圖片 1, 2)
+ * 此功能會統計所有 Orders 中尚未到貨的商品總量
  */
-function buildVendorOrders() {
-  const orders = orderService.getAllOrders();
+async function buildVendorOrders() {
+  const orders = await sheetService.getOrders();
+  // 篩選出已下單但尚未到貨的 (ordered)
+  const pendingOrders = orders.filter(o => o.status === "ordered");
+  
   const map = {};
-
-  for (const o of orders) {
-    const product = productService.getProductByCode(o.productCode);
-    if (!product) continue;
-
-    const colorName = product.colors?.[o.colorCode] || o.colorCode;
-    const key = `${o.productCode}_${colorName}`;
-
+  for (const o of pendingOrders) {
+    const key = `${o.productCode}_${o.color}_${o.size}`;
     if (!map[key]) {
       map[key] = {
         productCode: o.productCode,
-        productName: product.name,
-        color: colorName,
-        qty: 0,
+        productName: o.productName,
+        color: o.color,
+        size: o.size,
+        qty: 0
       };
     }
-
     map[key].qty += Number(o.qty);
   }
-
   return Object.values(map);
 }
 
 /**
- * 同步到 Google Sheet（VendorOrders）
+ * 同步到 Google Sheet 並回傳 PDF 連結
  */
-async function exportVendorOrders() {
-  const list = buildVendorOrders();
-  if (!list.length) return { success: false };
+export async function generateVendorOrderPdf() {
+  const list = await buildVendorOrders();
+  if (!list.length) throw new Error("目前沒有待訂購的商品");
 
+  // 1. 同步到 VendorOrders 工作表
   await sheetService.replaceVendorOrders(list);
-  return { success: true, count: list.length };
+
+  // 2. 產出廠商採購 PDF (重複利用 pdfService)
+  // 此處假設 pdfService 有針對廠商格式做處理，或直接用通用格式
+  const pdfUrl = await pdfService.generateVendorPdf(list);
+  return pdfUrl;
 }
 
-module.exports = {
-  exportVendorOrders,
-};
+export default { generateVendorOrderPdf };

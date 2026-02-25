@@ -25,3 +25,5 @@ build/
 # ===== PDF / Temp =====
 pdf/
 tmp/
+public/pdf/*.pdf
+.DS_Store

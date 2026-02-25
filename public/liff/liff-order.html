@@ -1,73 +1,109 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<meta charset="UTF-8">
-<title>商品下單</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-<style>
-body { font-family: sans-serif; padding: 12px; }
-.card {
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 12px;
-}
-.card h3 { margin: 0 0 6px; }
-.price { color: #d32f2f; font-weight: bold; }
-button {
-  margin-top: 8px;
-  width: 100%;
-  padding: 10px;
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商品詳情</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: -apple-system, sans-serif; margin: 0; background: #f0f0f0; padding-bottom: 80px; }
+    .media-box img, .media-box iframe { width: 100%; aspect-ratio: 16/9; border: none; display: block; }
+    .content-card { background: white; margin: 12px; padding: 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .price { color: #e44d26; font-size: 1.4em; font-weight: bold; margin: 8px 0; }
+    .desc { font-size: 14px; color: #555; white-space: pre-line; line-height: 1.6; }
+    .footer-bar { position: fixed; bottom: 0; width: 100%; background: white; padding: 12px; box-sizing: border-box; display: flex; gap: 8px; border-top: 1px solid #ddd; }
+    select, input { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+    button { flex: 1; background: #06c755; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+  </style>
 </head>
-
 <body>
-<h2>🛒 開團商品</h2>
-<div id="list">載入中…</div>
+  <div id="app">
+    <div class="media-box" id="mediaContainer"></div>
+    <div class="content-card">
+      <h2 id="pName">載入中...</h2>
+      <div class="price" id="pPrice"></div>
+      <div class="desc" id="pDesc"></div>
+    </div>
+    
+    <div class="footer-bar">
+      <select id="colorSel"></select>
+      <select id="sizeSel"></select>
+      <input type="number" id="qtyInput" value="1" min="1" style="width: 50px;">
+      <button onclick="submitOrder()">🛒 下單</button>
+    </div>
+  </div>
 
 <script>
+let product = null;
+let userId = "";
+let userName = "";
+
 async function init() {
-  await liff.init({ liffId: "2008857998-imqg5sNq" });
-  if (!liff.isLoggedIn()) {
-    liff.login();
-    return;
+  await liff.init({ liffId: "你的LIFF_ID" });
+  if (!liff.isLoggedIn()) { liff.login(); return; }
+  const profile = await liff.getProfile();
+  userId = profile.userId;
+  userName = profile.displayName;
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  
+  const res = await fetch(`/api/products`);
+  const products = await res.json();
+  product = products.find(p => p.productCode === code);
+
+  if (product) render();
+}
+
+function render() {
+  document.getElementById('pName').innerText = product.productName;
+  document.getElementById('pPrice').innerText = `$${product.price}`;
+  document.getElementById('pDesc').innerText = product.detailText || "暫無說明";
+
+  // 處理媒體區
+  const media = document.getElementById('mediaContainer');
+  if (product.youtube) {
+    const vid = product.youtube.split('v=')[1] || product.youtube.split('/').pop();
+    media.innerHTML = `<iframe src="https://www.youtube.com/embed/${vid}" allowfullscreen></iframe>`;
+  } else {
+    media.innerHTML = `<img src="${product.images || 'https://via.placeholder.com/400x225?text=No+Image'}">`;
   }
 
-  loadProducts();
+  // 處理規格下拉 (假設 colorMap 格式為 "紅,藍 | S,M,L")
+  const [colors, sizes] = product.colorMap.split('|');
+  if (colors) {
+    document.getElementById('colorSel').innerHTML = colors.split(',').map(c => `<option value="${c.trim()}">${c.trim()}</option>`).join('');
+  }
+  if (sizes) {
+    document.getElementById('sizeSel').innerHTML = sizes.split(',').map(s => `<option value="${s.trim()}">${s.trim()}</option>`).join('');
+  }
 }
 
-async function loadProducts() {
-  const res = await fetch("/api/products");
-  const products = await res.json();
+async function submitOrder() {
+  const body = {
+    productCode: product.productCode,
+    qty: document.getElementById('qtyInput').value,
+    color: document.getElementById('colorSel').value,
+    size: document.getElementById('sizeSel').value,
+    lineUserId: userId,
+    buyerName: userName,
+    type: product.type
+  };
 
-  const list = document.getElementById("list");
-  list.innerHTML = "";
-
-  products
-    .filter(p => p.active === "TRUE")
-    .forEach(p => {
-      const div = document.createElement("div");
-      div.className = "card";
-      div.innerHTML = `
-        <h3>${p.productName}</h3>
-        <div class="price">NT$ ${p.price}</div>
-        <button onclick="openDetail('${p.productCode}')">
-          查看商品 / 下單
-        </button>
-      `;
-      list.appendChild(div);
-    });
-}
-
-function openDetail(productCode) {
-  liff.openWindow({
-    url: `https://你的網域/liff/liff-product-detail.html?productCode=${productCode}`,
-    external: false
+  const res = await fetch('/api/order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
   });
-}
 
+  if (res.ok) {
+    alert("🎉 下單成功！");
+    liff.closeWindow();
+  } else {
+    const err = await res.json();
+    alert("❌ 失敗：" + err.error);
+  }
+}
 init();
 </script>
 </body>
