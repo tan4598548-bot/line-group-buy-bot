@@ -3,12 +3,13 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-nul
 
-# ===== Env =====
+# ===== Env (絕對不能上傳) =====
 .env
 .env.*
 !.env.example
+# 如果有實體金鑰檔案也要排除
+secret.json
 
 # ===== OS =====
 .DS_Store
@@ -18,12 +19,12 @@ Thumbs.db
 logs/
 *.log
 
-# ===== Build =====
-dist/
-build/
-
-# ===== PDF / Temp =====
-pdf/
-tmp/
+# ===== PDF / Temp (修正路徑) =====
+# 排除所有產出的 PDF 檔案，但保留資料夾結構
 public/pdf/*.pdf
-.DS_Store
+# 如果你想完全忽略該目錄也可以用：
+# public/pdf/
+
+# ===== Fonts (確保不要誤刪) =====
+# 這裡不需要寫，除非你想排除字體。
+# 請確認 public/fonts/msjh.ttc 「不在」排除名單內。
