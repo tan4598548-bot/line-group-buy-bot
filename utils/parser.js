@@ -1,10 +1,8 @@
 /**
  * 解析下單格式：
  * A01 2 BK M
- * A01 1 BK,M L
  */
-
-function parseOrder(text) {
+export function parseOrder(text) {
   const parts = text.trim().split(/\s+/);
   if (parts.length < 3) return null;
 
@@ -15,6 +13,7 @@ function parseOrder(text) {
   const colorPart = parts[2];
   const size = parts[3] || '';
 
+  // 支援多顏色逗號分隔處理
   const colors = colorPart.split(',').map(c => c.toUpperCase());
 
   return {
@@ -25,4 +24,4 @@ function parseOrder(text) {
   };
 }
 
-module.exports = { parseOrder };
+export default { parseOrder };

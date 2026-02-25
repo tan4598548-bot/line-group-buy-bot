@@ -1,23 +1,27 @@
-const products = require('../config/products');
+import productService from '../services/productService.js';
 
-function validateOrder(order) {
-  const product = products[order.productCode];
-  if (!product) return '❌ 商品代碼不存在';
+export async function validateOrder(order) {
+  const products = await productService.listProducts();
+  const product = products.find(p => p.productCode === order.productCode);
 
-  if (order.size && product.sizes && !product.sizes.includes(order.size)) {
-    return '❌ 尺寸錯誤';
+  if (!product) return { valid: false, message: '❌ 商品代碼不存在' };
+  if (!product.active) return { valid: false, message: '❌ 商品已關單' };
+
+  // 如果有定義顏色範圍 (colorMap 欄位)
+  if (product.colorMap) {
+    const allowed = product.colorMap.toUpperCase();
+    for (let c of order.colors) {
+      if (!allowed.includes(c)) {
+        return { valid: false, message: `❌ 規格 ${c} 不存在` };
+      }
+    }
   }
 
-  order.colors.forEach(c => {
-    if (product.colors && !product.colors.includes(c)) {
-      throw new Error(`❌ 顏色 ${c} 不存在`);
-    }
-  });
-
   return {
-    productName: product.name,
-    price: product.price,
+    valid: true,
+    productName: product.productName,
+    price: product.price
   };
 }
 
-module.exports = { validateOrder };
+export default { validateOrder };

@@ -1,104 +1,68 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <title>商品上架</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-
-  <style>
-    body { font-family: system-ui; background: #f2f2f2; padding: 16px; }
-    h2 { text-align: center; }
-    .card { background: #fff; padding: 16px; border-radius: 12px; margin-bottom: 16px; }
-    label { font-weight: bold; display: block; margin-top: 10px; }
-    input { width: 100%; padding: 8px; margin-top: 4px; border-radius: 6px; border: 1px solid #ccc; box-sizing: border-box; }
-    button { width: 100%; padding: 12px; background: #06c755; color: #fff; border: none; border-radius: 8px; font-size: 16px; margin-top: 16px; cursor: pointer; }
-    button:active { background: #05a346; }
-  </style>
+    <meta charset="UTF-8">
+    <title>上架商品</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+        input, select, button { width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; }
+        button { background: #06c755; color: white; border: none; font-weight: bold; }
+    </style>
 </head>
-
 <body>
-  <h2>🧺 商品上架</h2>
-
-  <div class="card">
-    <label>商品名稱</label>
-    <input id="nameInput" placeholder="例：維尼熊連帽外套" />
-
-    <label>價格</label>
-    <input id="priceInput" type="number" placeholder="例：590" />
-
-    <label>結單日</label>
-    <input id="dateInput" type="date" />
-
-    <label>尺寸（用 / 分隔）</label>
-    <input id="sizeInput" placeholder="S/M/L/XL" />
-
-    <label>顏色（用 / 分隔）</label>
-    <input id="colorInput" placeholder="紅/黃/藍" />
-
-    <button onclick="submitProduct()">✅ 上架商品</button>
-  </div>
+    <h2>📦 新增團購商品</h2>
+    <input id="nameInput" placeholder="商品名稱">
+    <input id="priceInput" type="number" placeholder="單價">
+    <input id="dateInput" type="date" placeholder="結單日期">
+    <input id="colorInput" placeholder="規格 (如：紅色,藍色)">
+    <input id="sizeInput" placeholder="尺寸 (如：S,M,L)">
+    <select id="typeSelect">
+        <option value="normal">預購 (Normal)</option>
+        <option value="overstock">現貨 (Overstock)</option>
+    </select>
+    <input id="stockInput" type="number" placeholder="現貨初始庫存 (預購填0)">
+    <input id="imagesInput" placeholder="圖片連結">
+    <button onclick="submitProduct()">確認上架</button>
 
 <script>
-let adminUserId = null;
+let adminUserId = "";
 
 async function init() {
-  try {
-    await liff.init({ liffId: "2008857998-AoqmEajq" });
-    if (!liff.isLoggedIn()) {
-      liff.login();
-    } else {
-      adminUserId = liff.getContext().userId;
-    }
-  } catch (err) {
-    console.error("LIFF Init Failed", err);
-  }
+    await liff.init({ liffId: "你的LIFF_ID" });
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    const profile = await liff.getProfile();
+    adminUserId = profile.userId;
 }
 
 async function submitProduct() {
-  // 獲取輸入值
-  const name = document.getElementById('nameInput').value.trim();
-  const price = document.getElementById('priceInput').value;
-  const closeDate = document.getElementById('dateInput').value;
-  const sizes = document.getElementById('sizeInput').value;
-  const colors = document.getElementById('colorInput').value;
+    const body = {
+        name: document.getElementById('nameInput').value,
+        price: Number(document.getElementById('priceInput').value),
+        closeDate: document.getElementById('dateInput').value,
+        colorMap: `${document.getElementById('colorInput').value} | ${document.getElementById('sizeInput').value}`,
+        type: document.getElementById('typeSelect').value,
+        totalStock: Number(document.getElementById('stockInput').value),
+        images: document.getElementById('imagesInput').value
+    };
 
-  if (!name || !price || !closeDate) {
-    alert("請填寫商品名稱、價格與結單日！");
-    return;
-  }
-
-  const body = {
-    name: name,
-    price: Number(price),
-    closeDate: closeDate,
-    colorMap: `${colors} | ${sizes}` // 格式化為 Google Sheets 預期格式
-  };
-
-  try {
     const res = await fetch("/api/admin/products/create", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "X-LIFF-USER-ID": adminUserId, // 修正為正確的變數
-        "X-LIFF-ROLE": "admin"  
-      },
-      body: JSON.stringify(body)
+        method: "POST",
+        headers: { 
+            "Content-Type": "application/json",
+            "x-liff-user-id": adminUserId 
+        },
+        body: JSON.stringify(body)
     });
 
-    const result = await res.json();
-    if (res.ok && result.ok) {
-      alert("🎉 商品已成功上架！");
-      location.reload();
+    if (res.ok) {
+        alert("成功！");
+        window.location.href = "liff-admin-dashboard.html";
     } else {
-      alert("❌ 上架失敗：" + (result.error || "未知錯誤"));
+        alert("失敗，請檢查管理員權限");
     }
-  } catch (error) {
-    alert("❌ 網路錯誤，請稍後再試");
-    console.error(error);
-  }
 }
-
 init();
 </script>
 </body>

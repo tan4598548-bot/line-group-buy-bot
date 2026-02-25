@@ -1,35 +1,22 @@
-import { 
-  getPendingOrders, 
-  markOrdersShipped as markShippedInSheet 
-} from "./sheetService.js";
+import { getOrders, updateOrderStatus } from "./sheetService.js";
 
-/**
- * 取得待出貨清單
- */
 export async function getShippingList() {
-  return await getPendingOrders();
+  const orders = await getOrders();
+  return orders.filter(o => o.status === "ordered");
 }
 
-/**
- * 執行出貨 (對齊 adminShipping.js 的需求)
- */
-export async function markOrdersShipped(rowIndices) {
-  if (!Array.isArray(rowIndices) || rowIndices.length === 0) {
-    throw new Error("未提供出貨行號");
+export async function markOrdersShipped(orderIds) {
+  const orders = await getOrders();
+  const shipped = [];
+
+  for (const o of orders) {
+    if (orderIds.includes(o.orderId)) {
+      await updateOrderStatus(o._row, "shipped");
+      shipped.push(o);
+    }
   }
-  return await markShippedInSheet(rowIndices);
+
+  return shipped;
 }
 
-/**
- * 別名導向，確保 processShipping 也能用
- */
-export const processShipping = markOrdersShipped;
-
-// 建立物件供預設匯出
-const shippingService = {
-  getShippingList,
-  markOrdersShipped,
-  processShipping
-};
-
-export default shippingService;
+export default { getShippingList, markOrdersShipped };

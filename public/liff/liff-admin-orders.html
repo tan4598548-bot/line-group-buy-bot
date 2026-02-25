@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>現貨統計</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+body { font-family: system-ui; padding:16px; background:#f2f2f2; }
+.card { background:#fff; padding:12px; border-radius:12px; margin-bottom:12px; }
+</style>
+</head>
+<body>
+<h2>📊 現貨出清統計</h2>
+<div id="app"></div>
+
+<script>
+async function init() {
+  await liff.init({ liffId: "2008857998-481MeChx" });
+  if (!liff.isLoggedIn()) liff.login();
+
+  const res = await fetch("/api/admin/overstock/stats", {
+    headers: { "X-Line-Admin": liff.getIDToken() }
+  });
+
+  const d = await res.json();
+  const el = document.getElementById("app");
+
+  el.innerHTML = `
+    <div class="card">💰 總營收：$${d.totalRevenue}</div>
+    <div class="card">🔥 商品排行<br>${Object.entries(d.productRank).map(([k,v])=>`${k} x${v}`).join("<br>")}</div>
+    <div class="card">👤 買家排行<br>${Object.entries(d.buyerRank).map(([k,v])=>`${k} x${v}`).join("<br>")}</div>
+  `;
+}
+
+init();
+</script>
+</body>
+</html>

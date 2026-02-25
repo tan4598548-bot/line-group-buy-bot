@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>現貨出清訂單管理</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
+  <style>
+    body {
+      font-family: system-ui;
+      background: #f2f2f2;
+      padding: 16px;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .card {
+      background: #fff;
+      padding: 12px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: none;
+      font-size: 16px;
+      background: #06c755;
+      color: #fff;
+      margin-top: 12px;
+    }
+    button.secondary {
+      background: #555;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>📦 現貨出清訂單</h2>
+
+  <div id="list"></div>
+
+  <button onclick="printPdf()">🖨️ 列印出貨 PDF</button>
+
+<script>
+const ADMIN_LIFF_ID = "2008857998-nGMe5KGP";
+
+async function init() {
+  await liff.init({ liffId: ADMIN_LIFF_ID });
+  if (!liff.isLoggedIn()) liff.login();
+  loadOrders();
+}
+
+async function loadOrders() {
+  const res = await fetch("/api/admin/overstock/orders", {
+    headers: {
+      "X-Line-Admin": liff.getIDToken()
+    }
+  });
+  const data = await res.json();
+
+  const el = document.getElementById("list");
+  el.innerHTML = "";
+
+  data.forEach(o => {
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML = `
+      <div class="row"><b>買家</b><span>${o.buyerName}</span></div>
+      <div class="row"><b>商品</b><span>${o.productName}</span></div>
+      <div class="row"><b>規格</b><span>${o.color} / ${o.size}</span></div>
+      <div class="row"><b>價格</b><span>$${o.price}</span></div>
+      <div class="row"><b>狀態</b><span>${o.status}</span></div>
+    `;
+    el.appendChild(div);
+  });
+}
+
+async function printPdf() {
+  const res = await fetch("/api/admin/overstock/shipping-pdf", {
+    headers: {
+      "X-Line-Admin": liff.getIDToken()
+    }
+  });
+
+  const data = await res.json();
+  if (!data.pdfUrl) {
+    alert("目前沒有可列印的出貨資料");
+    return;
+  }
+  window.open(data.pdfUrl, "_blank");
+}
+
+init();
+</script>
+</body>
+</html>

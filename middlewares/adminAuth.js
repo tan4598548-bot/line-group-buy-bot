@@ -1,26 +1,23 @@
-// middlewares/adminAuth.js
-export default function adminAuth(req, res, next) {
-  const userId = req.header("X-LIFF-USER-ID");
-  const role = req.header("X-LIFF-ROLE");
+import dotenv from 'dotenv';
+dotenv.config();
 
-  if (!userId) {
-    return res.status(401).json({ error: "Missing LIFF User ID" });
+const ADMIN_LINE_IDS = process.env.ADMIN_LINE_IDS
+  ? process.env.ADMIN_LINE_IDS.split(',').map(id => id.trim())
+  : [];
+
+export function verifyAdmin(req, res, next) {
+  // 統一與 index.js 的 header 命名
+  const lineId = req.headers['x-liff-user-id'] || req.headers['X-LIFF-USER-ID'];
+
+  if (!lineId) {
+    return res.status(401).json({ error: 'Missing LINE ID' });
   }
 
-  if (role !== "admin") {
-    return res.status(403).json({ error: "Not admin role" });
+  if (!ADMIN_LINE_IDS.includes(lineId)) {
+    return res.status(403).json({ error: 'Admin only access' });
   }
 
-  const admins = (process.env.ADMIN_LINE_IDS || "")
-    .split(",")
-    .map(id => id.trim())
-    .filter(Boolean);
-
-  if (!admins.includes(userId)) {
-    return res.status(403).json({ error: "Admin only" });
-  }
-
-  // 🔐 通過驗證
-  req.adminUserId = userId;
   next();
 }
+
+export default verifyAdmin;
