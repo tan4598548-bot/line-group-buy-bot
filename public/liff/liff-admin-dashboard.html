@@ -5,31 +5,28 @@
   <title>團購管理中心</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 20px; margin: 0; }
-    h2 { text-align: center; color: #333; margin-bottom: 25px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-    .menu-item { 
-      background: white; padding: 25px 10px; border-radius: 15px; text-align: center;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; text-decoration: none; 
-      color: #333; font-weight: bold; font-size: 15px; border: 1px solid #eee;
+    body { font-family: sans-serif; background: #f4f6f9; padding: 20px; margin: 0; }
+    .welcome { text-align: center; margin-bottom: 25px; }
+    .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .card { 
+      background: white; border-radius: 15px; padding: 25px 10px; text-align: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-decoration: none; color: #333;
+      border: 1px solid #eaeaea; display: flex; flex-direction: column; align-items: center;
     }
-    .menu-item:active { background: #fafafa; transform: scale(0.98); }
-    .footer { margin-top: 30px; text-align: center; }
-    .btn-test { color: #007bff; text-decoration: none; font-size: 14px; }
+    .card:active { transform: scale(0.96); background: #fcfcfc; }
+    .card-icon { font-size: 28px; margin-bottom: 10px; }
+    .card-title { font-weight: bold; font-size: 15px; }
   </style>
 </head>
 <body>
-  <h2>👨‍💼 團購管理系統</h2>
-  <div class="grid">
-    <a href="liff-admin-product.html" class="menu-item">📦 1. 商品管理</a>
-    <a href="liff-admin-orders.html" class="menu-item">📑 2. 訂單查詢</a>
-    <a href="liff-admin-arrival.html" class="menu-item">📥 3. 到貨點貨</a>
-    <a href="liff-admin-shipping.html" class="menu-item">🚚 4. 出貨發貨</a>
-    <a href="liff-admin-vendor.html" class="menu-item">🏭 5. 廠商管理</a>
-    <a href="liff-admin-settings.html" class="menu-item">⚙️ 6. 系統設定</a>
-  </div>
-  <div class="footer">
-    <a href="liff-buyer-orders.html" class="btn-test">👁️ 買家畫面測試入口</a>
+  <div class="welcome"><h2>👨‍💼 團購管理中心</h2></div>
+  <div class="menu-grid">
+    <a href="liff-admin-product.html" class="card"><span class="card-icon">➕</span><span class="card-title">1. 商品管理</span></a>
+    <a href="liff-admin-orders.html" class="card"><span class="card-icon">📑</span><span class="card-title">2. 訂單查詢</span></a>
+    <a href="liff-admin-arrival.html" class="card"><span class="card-icon">📥</span><span class="card-title">3. 到貨/點貨</span></a>
+    <a href="liff-admin-shipping.html" class="card"><span class="card-icon">🚚</span><span class="card-title">4. 發貨作業</span></a>
+    <a href="liff-admin-vendor.html" class="card"><span class="card-icon">🏢</span><span class="card-title">5. 廠商管理</span></a>
+    <a href="liff-admin-settings.html" class="card"><span class="card-icon">⚙️</span><span class="card-title">6. 系統設定</span></a>
   </div>
 </body>
 </html>
