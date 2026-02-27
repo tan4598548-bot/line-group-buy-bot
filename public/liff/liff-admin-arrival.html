@@ -6,38 +6,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 12px; }
-    .item { border-bottom: 1px solid #ddd; padding: 8px 0; }
-    input[type=number] { width: 60px; }
-    button { margin-top: 12px; padding: 10px; width: 100%; }
+    body { font-family: sans-serif; padding: 12px; background: #f9f9f9; }
+    .item { background: white; margin-bottom: 8px; padding: 12px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    input[type=number] { width: 70px; padding: 5px; }
+    button { margin-top: 12px; padding: 12px; width: 100%; border: none; border-radius: 6px; font-weight: bold; }
+    .btn-green { background: #06c755; color: white; }
+    .btn-gray { background: #eee; color: #666; }
   </style>
 </head>
 <body>
   <h2>📦 到貨點貨</h2>
-  <div id="list"></div>
-
-  <button onclick="submitArrival()">✅ 確認到貨</button>
-  <button onclick="clearArrived()">🧹 一鍵清除已到貨</button>
+  <div id="list">載入中...</div>
+  <button class="btn-green" onclick="submitArrival()">✅ 確認到貨</button>
 
 <script>
-let userId = "";
+let adminUserId = "";
 let items = [];
-let adminUserId = null; // 🔴 新增：全域儲存 admin userId
 
 async function init() {
   await liff.init({ liffId: "2008857998-ePcCkr6K" });
-  if (!liff.isLoggedIn()) {
-    liff.login();
-    return;
-  adminUserId = liff.getContext().userId; // 🔴 新增  
-  }
-
+  if (!liff.isLoggedIn()) { liff.login(); return; }
   const profile = await liff.getProfile();
-  userId = profile.userId;
+  adminUserId = profile.userId;
 
-  const res = await fetch(`/api/admin/arrival-list?userId=${userId}`);
+  const res = await fetch("/api/admin/arrival-list", {
+    headers: { "x-liff-user-id": adminUserId }
+  });
+  
   if (!res.ok) {
-    alert("非管理員");
+    alert("管理員權限錯誤");
     liff.closeWindow();
     return;
   }
@@ -48,15 +45,14 @@ async function init() {
 
 function render() {
   const el = document.getElementById("list");
+  if(items.length === 0) { el.innerHTML = "目前無待到貨項目"; return; }
   el.innerHTML = items.map((i, idx) => `
     <div class="item">
-      <label>
-        <input type="checkbox" data-idx="${idx}">
-        ${i.productName} / ${i.color} / ${i.size}
-        （訂購 ${i.totalQty}）
+      <label style="display:block; font-weight:bold; margin-bottom:5px;">
+        <input type="checkbox" data-idx="${idx}"> ${i.productName}
       </label>
-      實到：
-      <input type="number" min="0" value="${i.totalQty}" data-qty="${idx}">
+      <small>${i.color} / ${i.size} (訂購: ${i.totalQty})</small><br>
+      實到：<input type="number" min="0" value="${i.totalQty}" data-qty="${idx}">
     </div>
   `).join("");
 }
@@ -71,38 +67,24 @@ async function submitArrival() {
     }
   });
 
-  if (!selected.length) {
-    alert("請勾選項目");
-    return;
+  if (!selected.length) return alert("請勾選項目");
+
+  const res = await fetch("/api/admin/confirm", {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json",
+      "x-liff-user-id": adminUserId 
+    },
+    body: JSON.stringify({ items: selected })
+  });
+
+  if(res.ok) {
+    alert("到貨完成");
+    location.reload();
+  } else {
+    alert("更新失敗");
   }
-
-  await fetch("/api/admin/confirm", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId, items: selected })
-  });
-
-  alert("到貨完成");
-  location.reload();
 }
-
-async function clearArrived() {
-  if (!confirm("確定清除已到貨項目？")) return;
-
-  await fetch("/api/admin/clear", {
-    method: "POST",
-    headers: { "Content-Type": "application/json",
-        /* 🔴 新增（必要） */
-    "X-LIFF-USER-ID": profile.userId,
-    "X-LIFF-ROLE": "admin"
-     },
-    body: JSON.stringify({ userId })
-  });
-
-  alert("已清除");
-  location.reload();
-}
-
 init();
 </script>
 </body>

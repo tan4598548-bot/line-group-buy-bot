@@ -13,7 +13,7 @@ import orderService from "./services/orderService.js";
 import shippingService from "./services/shippingService.js";
 import arrivalService from "./services/arrivelService.js";
 import pdfService from "./services/pdfService.js";
-import vendorService from "./services/vendorService.js"; // 補上
+import vendorService from "./services/vendorService.js";
 
 const app = express();
 app.use(express.json());
@@ -24,56 +24,46 @@ app.use("/pdf", express.static(path.join(__dirname, "public/pdf")));
 const adminAuth = (req, res, next) => {
   const userId = req.header("x-liff-user-id");
   const admins = (process.env.ADMIN_LINE_IDS || "").split(",").map(i => i.trim());
+  
   if (userId && admins.includes(userId)) {
     req.adminUserId = userId;
     next();
   } else {
-    res.status(403).json({ ok: false, error: "Admin only" });
+    console.warn(`拒絕未授權存取: ${userId}`);
+    res.status(403).json({ ok: false, error: "您無管理員權限，請確認您的 LINE ID 已加入 ADMIN_LINE_IDS" });
   }
 };
 
-/* ===== 商品 API ===== */
+/* ===== API 路由 ===== */
 app.get("/api/products", async (req, res) => {
-  try {
-    const data = await productService.listProducts(req.query.type);
-    res.json(data);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  try { res.json(await productService.listProducts(req.query.type)); } 
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post("/api/admin/products/create", adminAuth, async (req, res) => {
-  try {
-    const result = await productService.createProduct(req.body);
-    res.json({ ok: true, result });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  try { res.json({ ok: true, result: await productService.createProduct(req.body) }); } 
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-/* ===== 訂單 API ===== */
 app.post("/api/order", orderService.handleOrder);
 app.get("/api/buyer/orders", async (req, res) => {
-  try {
-    res.json(await orderService.getBuyerOrders(req.query.userId));
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  try { res.json(await orderService.getBuyerOrders(req.query.userId)); } 
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-/* ===== 到貨 API ===== */
 app.get("/api/admin/arrival-list", adminAuth, async (req, res) => {
-  try {
-    res.json(await arrivalService.getArrivalList());
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  try { res.json(await arrivalService.getArrivalList()); } 
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post("/api/admin/confirm", adminAuth, async (req, res) => {
-  try {
-    await arrivalService.markArrived(req.body.items);
-    res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  try { await arrivalService.markArrived(req.body.items); res.json({ ok: true }); } 
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-/* ===== 出貨 API ===== */
 app.get("/api/admin/shipping-list", adminAuth, async (req, res) => {
-  try {
-    res.json(await shippingService.getShippingList());
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  try { res.json(await shippingService.getShippingList()); } 
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post("/api/admin/ship", adminAuth, async (req, res) => {
@@ -84,12 +74,9 @@ app.post("/api/admin/ship", adminAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-/* ===== 廠商管理 API (補齊圖片 2 需求) ===== */
 app.get("/api/admin/vendor/order-pdf", adminAuth, async (req, res) => {
-  try {
-    const pdfUrl = await vendorService.generateVendorOrderPdf();
-    res.json({ ok: true, pdfUrl });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  try { res.json({ ok: true, pdfUrl: await vendorService.generateVendorOrderPdf() }); } 
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 const PORT = process.env.PORT || 10000;

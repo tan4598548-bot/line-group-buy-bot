@@ -5,31 +5,33 @@
   <title>發貨列印</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .order-item { border-bottom: 1px solid #eee; padding: 10px 0; }
+    button { background: #007bff; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: bold; margin-top: 15px; }
+  </style>
 </head>
 <body>
-<h2>🚚 發貨 PDF</h2>
-<div id="list"></div>
-<button onclick="ship()">📄 產生 PDF</button>
+  <h2>🚚 出貨發貨清單</h2>
+  <div id="list">載入中...</div>
+  <button onclick="ship()">📄 產生發貨 PDF</button>
 
 <script>
-let userId = "";
+let adminUserId = "";
 let orders = [];
-let adminUserId = null; // 🔴 新增：全域儲存 admin userId
 
 async function init() {
   await liff.init({ liffId: "2008857998-HUEXLkgO" });
-  if (!liff.isLoggedIn()) {
-    liff.login();
-    return;
-  adminUserId = liff.getContext().userId; // 🔴 新增  
-  }
-
+  if (!liff.isLoggedIn()) { liff.login(); return; }
   const profile = await liff.getProfile();
-  userId = profile.userId;
+  adminUserId = profile.userId;
 
-  const res = await fetch(`/api/admin/shipping-list?userId=${userId}`);
+  const res = await fetch("/api/admin/shipping-list", {
+    headers: { "x-liff-user-id": adminUserId }
+  });
+
   if (!res.ok) {
-    alert("非管理員");
+    alert("權限錯誤");
     liff.closeWindow();
     return;
   }
@@ -40,11 +42,14 @@ async function init() {
 
 function render() {
   const el = document.getElementById("list");
+  if(orders.length === 0) { el.innerHTML = "無待出貨訂單"; return; }
   el.innerHTML = orders.map(o => `
-    <label>
-      <input type="checkbox" value="${o.orderId}">
-      ${o.buyerName} - ${o.productName} x ${o.qty}
-    </label><br>
+    <div class="order-item">
+      <label>
+        <input type="checkbox" value="${o.orderId}">
+        <strong>${o.buyerName}</strong>: ${o.productName} (${o.qty}件)
+      </label>
+    </div>
   `).join("");
 }
 
@@ -54,18 +59,21 @@ async function ship() {
 
   const res = await fetch("/api/admin/ship", {
     method: "POST",
-    headers: { "Content-Type": "application/json",
-      /* 🔴 新增（必要） */
-    "X-LIFF-USER-ID": profile.userId,
-    "X-LIFF-ROLE": "admin"
-     },
-    body: JSON.stringify({ userId, orderIds: ids })
+    headers: { 
+      "Content-Type": "application/json",
+      "x-liff-user-id": adminUserId 
+    },
+    body: JSON.stringify({ orderIds: ids })
   });
 
   const data = await res.json();
-  window.open(data.pdfUrl, "_blank");
+  if(data.pdfUrl) {
+    window.open(data.pdfUrl, "_blank");
+    location.reload();
+  } else {
+    alert("產生失敗");
+  }
 }
-
 init();
 </script>
 </body>

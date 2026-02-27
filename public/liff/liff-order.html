@@ -6,30 +6,151 @@
   <title>商品詳情</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: -apple-system, sans-serif; margin: 0; background: #f0f0f0; padding-bottom: 80px; }
-    .media-box img, .media-box iframe { width: 100%; aspect-ratio: 16/9; border: none; display: block; }
-    .content-card { background: white; margin: 12px; padding: 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    .price { color: #e44d26; font-size: 1.4em; font-weight: bold; margin: 8px 0; }
-    .desc { font-size: 14px; color: #555; white-space: pre-line; line-height: 1.6; }
-    .footer-bar { position: fixed; bottom: 0; width: 100%; background: white; padding: 12px; box-sizing: border-box; display: flex; gap: 8px; border-top: 1px solid #ddd; }
-    select, input { padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
-    button { flex: 1; background: #06c755; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    :root {
+      --primary-color: #06c755; /* LINE 綠 */
+      --price-color: #e44d26;
+      --bg-color: #f8f9fa;
+      --text-main: #333333;
+      --text-sub: #666666;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding-bottom: 90px; /* 為底部按鈕留空間 */
+    }
+
+    /* 頂部媒體區 */
+    .media-box {
+      width: 100%;
+      background: #000;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .media-box img, .media-box iframe {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      display: block;
+      border: none;
+    }
+
+    /* 商品主資訊卡 */
+    .content-card {
+      background: white;
+      margin: 15px;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    .product-title {
+      font-size: 20px;
+      font-weight: 800;
+      margin-bottom: 8px;
+      color: var(--text-main);
+    }
+
+    .price-tag {
+      font-size: 24px;
+      color: var(--price-color);
+      font-weight: bold;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: baseline;
+    }
+    .price-tag::before { content: "$"; font-size: 16px; margin-right: 2px; }
+
+    /* 詳細介紹區 (對齊記事本風格) */
+    .description-box {
+      border-top: 1px dashed #ddd;
+      padding-top: 15px;
+      font-size: 15px;
+      color: #444;
+      white-space: pre-line; /* 保留換行 */
+      word-break: break-all;
+    }
+
+    /* 底部下單列 */
+    .footer-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border-top: 1px solid #eee;
+      box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
+      z-index: 100;
+    }
+
+    .selector-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    select, input[type="number"] {
+      flex: 1;
+      height: 40px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 0 10px;
+      font-size: 14px;
+      outline: none;
+      background: white;
+    }
+
+    .btn-submit {
+      width: 100%;
+      height: 48px;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 24px; /* 膠囊型按鈕 */
+      font-size: 16px;
+      font-weight: bold;
+      box-shadow: 0 4px 10px rgba(6, 199, 85, 0.3);
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .btn-submit:active { transform: scale(0.98); }
+
+    /* 標籤小裝飾 */
+    .tag {
+      display: inline-block;
+      background: #e8f9ee;
+      color: var(--primary-color);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
   </style>
 </head>
 <body>
   <div id="app">
     <div class="media-box" id="mediaContainer"></div>
+
     <div class="content-card">
-      <h2 id="pName">載入中...</h2>
-      <div class="price" id="pPrice"></div>
-      <div class="desc" id="pDesc"></div>
+      <div id="pTag" class="tag">團購熱銷中</div>
+      <div class="product-title" id="pName">載入中...</div>
+      <div class="price-tag" id="pPrice">0</div>
+      
+      <div class="description-box" id="pDesc"></div>
     </div>
     
     <div class="footer-bar">
-      <select id="colorSel"></select>
-      <select id="sizeSel"></select>
-      <input type="number" id="qtyInput" value="1" min="1" style="width: 50px;">
-      <button onclick="submitOrder()">🛒 下單</button>
+      <div class="selector-group">
+        <select id="colorSel"><option value="">選擇規格</option></select>
+        <select id="sizeSel"><option value="">尺寸</option></select>
+        <input type="number" id="qtyInput" value="1" min="1" style="flex: 0.5;">
+      </div>
+      <button class="btn-submit" onclick="submitOrder()">🛒 立即下單 (+1)</button>
     </div>
   </div>
 
@@ -39,7 +160,7 @@ let userId = "";
 let userName = "";
 
 async function init() {
-  await liff.init({ liffId: "你的LIFF_ID" });
+  await liff.init({ liffId: "2008857998-jbKsKkPY" }); // 請確認您的 ID
   if (!liff.isLoggedIn()) { liff.login(); return; }
   const profile = await liff.getProfile();
   userId = profile.userId;
@@ -57,19 +178,21 @@ async function init() {
 
 function render() {
   document.getElementById('pName').innerText = product.productName;
-  document.getElementById('pPrice').innerText = `$${product.price}`;
-  document.getElementById('pDesc').innerText = product.detailText || "暫無說明";
+  document.getElementById('pPrice').innerText = product.price;
+  document.getElementById('pDesc').innerText = product.detailText || "暫無商品說明";
+  
+  // 顯示標籤 (例如：現貨)
+  if(product.type === 'overstock') document.getElementById('pTag').innerText = "🔥 限時現貨";
 
-  // 處理媒體區
   const media = document.getElementById('mediaContainer');
   if (product.youtube) {
     const vid = product.youtube.split('v=')[1] || product.youtube.split('/').pop();
-    media.innerHTML = `<iframe src="https://www.youtube.com/embed/${vid}" allowfullscreen></iframe>`;
+    media.innerHTML = `<iframe src="https://www.youtube.com/embed/${vid}?autoplay=0" allowfullscreen></iframe>`;
   } else {
-    media.innerHTML = `<img src="${product.images || 'https://via.placeholder.com/400x225?text=No+Image'}">`;
+    media.innerHTML = `<img src="${product.images || 'https://via.placeholder.com/800x450?text=No+Image'}">`;
   }
 
-  // 處理規格下拉 (假設 colorMap 格式為 "紅,藍 | S,M,L")
+  // 規格解析 (紅,藍 | S,M)
   const [colors, sizes] = product.colorMap.split('|');
   if (colors) {
     document.getElementById('colorSel').innerHTML = colors.split(',').map(c => `<option value="${c.trim()}">${c.trim()}</option>`).join('');
@@ -82,26 +205,32 @@ function render() {
 async function submitOrder() {
   const body = {
     productCode: product.productCode,
+    productName: product.productName,
     qty: document.getElementById('qtyInput').value,
     color: document.getElementById('colorSel').value,
     size: document.getElementById('sizeSel').value,
     lineUserId: userId,
     buyerName: userName,
-    type: product.type
+    type: product.type,
+    price: product.price
   };
 
-  const res = await fetch('/api/order', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  try {
+    const res = await fetch('/api/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
 
-  if (res.ok) {
-    alert("🎉 下單成功！");
-    liff.closeWindow();
-  } else {
-    const err = await res.json();
-    alert("❌ 失敗：" + err.error);
+    if (res.ok) {
+      alert("✅ 下單成功！已記錄您的預購。");
+      liff.closeWindow();
+    } else {
+      const err = await res.json();
+      alert("❌ 下單失敗：" + err.error);
+    }
+  } catch (e) {
+    alert("❌ 網路連線錯誤");
   }
 }
 init();
