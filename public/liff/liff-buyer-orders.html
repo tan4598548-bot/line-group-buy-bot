@@ -6,132 +6,68 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body {
-      font-family: -apple-system, sans-serif;
-      background: #f4f4f7;
-      padding: 12px;
-      margin: 0;
-    }
-    h2 { text-align: center; color: #333; margin: 16px 0; }
-    .product-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr; /* 雙欄排版 */
-      gap: 12px;
-    }
-    .card {
-      background: #fff;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-      display: flex;
-      flex-direction: column;
-    }
-    .card img {
-      width: 100%;
-      aspect-ratio: 1 / 1; /* 正方形縮圖 */
-      object-fit: cover;
-      background: #eee;
-    }
-    .info {
-      padding: 10px;
-      flex-grow: 1;
-    }
-    .title {
-      font-size: 14px;
-      font-weight: bold;
-      color: #333;
-      height: 40px; /* 限制兩行高度 */
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-    }
-    .price {
-      color: #e44d26;
-      font-weight: bold;
-      margin-top: 4px;
-      font-size: 16px;
-    }
-    .btn-order {
-      width: 100%;
-      padding: 10px;
-      background: #06c755;
-      color: #fff;
-      border: none;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    .tag {
-      display: inline-block;
-      padding: 2px 6px;
-      background: #ff9500;
-      color: #fff;
-      font-size: 10px;
-      border-radius: 4px;
-      margin-bottom: 4px;
-    }
+    body { font-family: -apple-system, sans-serif; background: #f4f4f7; padding: 12px; margin: 0; }
+    h2 { text-align: center; color: #333; margin: 16px 0; font-size: 1.2rem; }
+    .product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); display: flex; flex-direction: column; transition: transform 0.2s; }
+    .card:active { transform: scale(0.98); }
+    .card img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: #eee; }
+    .info { padding: 10px; flex-grow: 1; }
+    .title { font-size: 14px; font-weight: bold; color: #333; height: 40px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-bottom: 4px; }
+    .price { color: #e44d26; font-weight: bold; font-size: 16px; }
+    .btn-order { width: 100%; padding: 10px; background: #06c755; color: #fff; border: none; font-weight: bold; cursor: pointer; border-radius: 0 0 12px 12px; }
+    .tag { display: inline-block; padding: 2px 6px; background: #ff9500; color: #fff; font-size: 10px; border-radius: 4px; margin-bottom: 4px; }
   </style>
 </head>
-
 <body>
-  <h2>🛒 精選商品</h2>
+  <h2>🛒 精選團購商品</h2>
   <div id="products" class="product-grid">
-    <p style="text-align: center; grid-column: span 2;">商品讀取中...</p>
+    <p style="text-align: center; grid-column: span 2;">商品載入中...</p>
   </div>
 
 <script>
 async function init() {
-  // 注意：此處 liffId 請確保已與您的 "我要下單" LIFF 綁定
-  await liff.init({ liffId: "2008857998-jbKsKkPY" });
-  if (!liff.isLoggedIn()) {
-    liff.login();
-    return;
-  }
+  await liff.init({ liffId: "2008857998-jbKsKkPY" }); // 已更新為您的下單 LIFF ID
+  if (!liff.isLoggedIn()) { liff.login(); return; }
   loadProducts();
 }
 
 async function loadProducts() {
   try {
-    // 抓取所有上架商品
     const res = await fetch("/api/products");
     const products = await res.json();
     
-    // 只顯示 active 為 true 的商品
-    const activeProducts = products.filter(p => p.active);
+    // 過濾出「是否上架」為 TRUE 的商品 (對應後端 active 屬性)
+    const activeProducts = products.filter(p => p.active === true || p.active === 'TRUE');
     
     const box = document.getElementById("products");
     if (activeProducts.length === 0) {
-      box.innerHTML = '<p style="text-align: center; grid-column: span 2;">目前暫無上架商品</p>';
+      box.innerHTML = '<p style="text-align: center; grid-column: span 2;">目前暫無上架商品，請稍候再回來看喔！</p>';
       return;
     }
 
     box.innerHTML = activeProducts.map(p => {
-      // 處理圖片：如果欄位為空則顯示預設圖
       const imgUrl = p.images ? p.images.split(',')[0] : 'https://via.placeholder.com/300?text=No+Image';
-      
       return `
-        <div class="card">
+        <div class="card" onclick="goToDetail('${p.productCode}')">
           <img src="${imgUrl}" alt="${p.productName}">
           <div class="info">
-            ${p.type === 'overstock' ? '<span class="tag">現貨搶購</span>' : ''}
+            ${p.type === 'overstock' ? '<span class="tag">現貨</span>' : '<span class="tag" style="background:#007bff">預購</span>'}
             <div class="title">${p.productName}</div>
             <div class="price">$${p.price}</div>
           </div>
-          <button class="btn-order" onclick="goToDetail('${p.productCode}')">查看詳情</button>
+          <button class="btn-order">查看詳情</button>
         </div>
       `;
     }).join("");
   } catch (error) {
-    console.error("載入失敗:", error);
-    document.getElementById("products").innerHTML = "載入失敗，請稍後再試";
+    document.getElementById("products").innerHTML = '<p style="text-align:center; grid-column:span 2;">載入失敗，請確認網路連線</p>';
   }
 }
 
 function goToDetail(code) {
-  // 跳轉至詳細頁，並帶上商品代碼
   window.location.href = `liff-order.html?code=${code}`;
 }
-
 init();
 </script>
 </body>

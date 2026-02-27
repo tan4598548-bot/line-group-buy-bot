@@ -33,7 +33,7 @@
 let adminUserId = "";
 
 async function init() {
-    await liff.init({ liffId: "2008857998-jbKsKkPY" }); // 已更新為您的 ID
+    await liff.init({ liffId: "2008857998-AoqmEajq" }); // 已更新為您的 ID
     if (!liff.isLoggedIn()) { liff.login(); return; }
     const profile = await liff.getProfile();
     adminUserId = profile.userId;
