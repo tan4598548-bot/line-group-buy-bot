@@ -1,59 +1,35 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>團購管理中心</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: -apple-system, sans-serif; background:#f6f7f8; margin:0; padding:16px; }
-    h2 { margin: 4px 0 12px; text-align: center; }
-    .card { background:#fff; border-radius:10px; padding:14px; margin-bottom:12px; box-shadow: 0 2px 6px rgba(0,0,0,.06); }
-    .btn { display:block; width:100%; padding:14px; margin:10px 0; border:0; border-radius:8px; font-size:16px; cursor:pointer; background:#06c755; color:#fff; font-weight: bold; }
-    .btn.secondary { background:#4a90e2; }
-    .btn.gray { background:#999; }
-    .btn.outline { background:#fff; color:#333; border:1px solid #ccc; }
-    .hint { font-size:13px; color:#666; margin-top:-4px; margin-bottom: 10px; padding-left: 4px; }
+    body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 20px; margin: 0; }
+    h2 { text-align: center; color: #333; margin-bottom: 25px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .menu-item { 
+      background: white; padding: 25px 10px; border-radius: 15px; text-align: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: pointer; text-decoration: none; 
+      color: #333; font-weight: bold; font-size: 15px; border: 1px solid #eee;
+    }
+    .menu-item:active { background: #fafafa; transform: scale(0.98); }
+    .footer { margin-top: 30px; text-align: center; }
+    .btn-test { color: #007bff; text-decoration: none; font-size: 14px; }
   </style>
 </head>
 <body>
-
-<h2>🧑‍💼 團購管理中心</h2>
-
-<div class="card">
-  <button class="btn" onclick="go('liff-admin-product.html')">📦 商品管理 (上下架/結單)</button>
-  <div class="hint">新增商品、設定截止日、關單</div>
-
-  <button class="btn secondary" onclick="go('liff-admin-arrival.html')">📥 到貨清點</button>
-  <div class="hint">廠商到貨 → 勾選已到</div>
-
-  <button class="btn" onclick="go('liff-admin-shipping.html')">🚚 出貨處理 + PDF</button>
-  <div class="hint">勾選出貨 → 產買家清單 PDF</div>
-</div>
-
-<div class="card">
-  <button class="btn outline" onclick="go('liff-buyer-orders.html')">👤 買家訂單查詢 (測試用)</button>
-  <div class="hint">檢查買家畫面是否正常</div>
-</div>
-
-<div class="card">
-  <button class="btn gray" onclick="liff.closeWindow()">❌ 關閉</button>
-</div>
-
-<script>
-async function init() {
-  // 這裡請確保 LIFF ID 正確
-  await liff.init({ liffId: "2008857998-GDRY6PGF" });
-  if (!liff.isLoggedIn()) {
-    liff.login();
-  }
-}
-
-function go(page) {
-  // 因為這是在 /liff/ 子目錄下互相跳轉，直接使用檔名即可
-  location.href = page;
-}
-init();
-</script>
+  <h2>👨‍💼 團購管理系統</h2>
+  <div class="grid">
+    <a href="liff-admin-product.html" class="menu-item">📦 1. 商品管理</a>
+    <a href="liff-admin-orders.html" class="menu-item">📑 2. 訂單查詢</a>
+    <a href="liff-admin-arrival.html" class="menu-item">📥 3. 到貨點貨</a>
+    <a href="liff-admin-shipping.html" class="menu-item">🚚 4. 出貨發貨</a>
+    <a href="liff-admin-vendor.html" class="menu-item">🏭 5. 廠商管理</a>
+    <a href="liff-admin-settings.html" class="menu-item">⚙️ 6. 系統設定</a>
+  </div>
+  <div class="footer">
+    <a href="liff-buyer-orders.html" class="btn-test">👁️ 買家畫面測試入口</a>
+  </div>
 </body>
 </html>

@@ -1,72 +1,58 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <title>商品清單</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"><title>商品清單</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: -apple-system, sans-serif; background: #f4f4f7; padding: 12px; margin: 0; }
-    h2 { text-align: center; color: #333; margin: 16px 0; font-size: 1.2rem; }
-    .product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); display: flex; flex-direction: column; transition: transform 0.2s; }
-    .card:active { transform: scale(0.98); }
-    .card img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: #eee; }
-    .info { padding: 10px; flex-grow: 1; }
-    .title { font-size: 14px; font-weight: bold; color: #333; height: 40px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-bottom: 4px; }
-    .price { color: #e44d26; font-weight: bold; font-size: 16px; }
-    .btn-order { width: 100%; padding: 10px; background: #06c755; color: #fff; border: none; font-weight: bold; cursor: pointer; border-radius: 0 0 12px 12px; }
-    .tag { display: inline-block; padding: 2px 6px; background: #ff9500; color: #fff; font-size: 10px; border-radius: 4px; margin-bottom: 4px; }
+    body { font-family: -apple-system, sans-serif; background: #f4f4f7; padding: 15px; margin: 0; }
+    h3 { color: #333; border-left: 5px solid #06c755; padding-left: 10px; margin-bottom: 20px; }
+    .list-container { display: flex; flex-direction: column; gap: 12px; }
+    .list-item { 
+      background: white; border-radius: 12px; padding: 12px; display: flex; 
+      align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); text-decoration: none; color: inherit;
+    }
+    .list-item:active { background: #f9f9f9; }
+    .list-img { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; background: #eee; margin-right: 15px; }
+    .list-content { flex: 1; }
+    .list-title { font-weight: bold; font-size: 16px; margin-bottom: 5px; color: #222; }
+    .list-price { color: #e44d26; font-weight: bold; font-size: 15px; }
+    .badge { font-size: 10px; background: #007bff; color: white; padding: 2px 6px; border-radius: 4px; margin-right: 5px; vertical-align: middle; }
   </style>
 </head>
 <body>
-  <h2>🛒 精選團購商品</h2>
-  <div id="products" class="product-grid">
-    <p style="text-align: center; grid-column: span 2;">商品載入中...</p>
-  </div>
+  <h3>🛒 目前開團商品</h3>
+  <div id="products" class="list-container">載入中...</div>
 
 <script>
 async function init() {
-  await liff.init({ liffId: "2008857998-jbKsKkPY" }); // 已更新為您的下單 LIFF ID
-  if (!liff.isLoggedIn()) { liff.login(); return; }
+  await liff.init({ liffId: "2008857998-jbKsKkPY" });
   loadProducts();
 }
-
 async function loadProducts() {
-  try {
-    const res = await fetch("/api/products");
-    const products = await res.json();
-    
-    // 過濾出「是否上架」為 TRUE 的商品 (對應後端 active 屬性)
-    const activeProducts = products.filter(p => p.active === true || p.active === 'TRUE');
-    
-    const box = document.getElementById("products");
-    if (activeProducts.length === 0) {
-      box.innerHTML = '<p style="text-align: center; grid-column: span 2;">目前暫無上架商品，請稍候再回來看喔！</p>';
-      return;
-    }
+  const res = await fetch("/api/products");
+  const products = await res.json();
+  const active = products.filter(p => p.active);
+  const container = document.getElementById("products");
+  
+  if(active.length === 0) { container.innerHTML = "目前暫無上架商品"; return; }
 
-    box.innerHTML = activeProducts.map(p => {
-      const imgUrl = p.images ? p.images.split(',')[0] : 'https://via.placeholder.com/300?text=No+Image';
-      return `
-        <div class="card" onclick="goToDetail('${p.productCode}')">
-          <img src="${imgUrl}" alt="${p.productName}">
-          <div class="info">
-            ${p.type === 'overstock' ? '<span class="tag">現貨</span>' : '<span class="tag" style="background:#007bff">預購</span>'}
-            <div class="title">${p.productName}</div>
-            <div class="price">$${p.price}</div>
+  container.innerHTML = active.map(p => {
+    const img = p.images ? p.images.split(',')[0] : 'https://via.placeholder.com/80 px';
+    return `
+      <a href="liff-order.html?code=${p.productCode}" class="list-item">
+        <img src="${img}" class="list-img">
+        <div class="list-content">
+          <div class="list-title">
+            ${p.type === 'overstock' ? '<span class="badge" style="background:#ff9500">現貨</span>' : '<span class="badge">預購</span>'}
+            ${p.productName}
           </div>
-          <button class="btn-order">查看詳情</button>
+          <div class="list-price">$${p.price}</div>
         </div>
-      `;
-    }).join("");
-  } catch (error) {
-    document.getElementById("products").innerHTML = '<p style="text-align:center; grid-column:span 2;">載入失敗，請確認網路連線</p>';
-  }
-}
-
-function goToDetail(code) {
-  window.location.href = `liff-order.html?code=${code}`;
+        <div style="color:#ccc;">❯</div>
+      </a>
+    `;
+  }).join("");
 }
 init();
 </script>
