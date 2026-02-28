@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>發貨管理</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .order-card { background: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid #007bff; }
+    .btn-pdf { background: #007bff; color: white; border: none; width: 100%; padding: 15px; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; position: fixed; bottom: 20px; left: 5%; width: 90%; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    .badge { background: #e7f3ff; color: #1877f2; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <button onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button>
+    <h3 style="margin:0;">📦 發貨管理</h3>
+  </div>
+
+  <div id="dispatch-list" style="margin-bottom: 80px;">載入已到貨訂單...</div>
+
+  <button class="btn-pdf" onclick="generatePDF()">🖨 產生發貨標籤 (PDF)</button>
+
+<script>
+let readyOrders = [];
+
+async function init() {
+  await liff.init({ liffId: "2008857998-qCQWSTKf" }); // 請替換為您的發貨管理 LIFF ID
+  loadReadyOrders();
+}
+
+async function loadReadyOrders() {
+  const res = await fetch("/api/admin/orders");
+  const allOrders = await res.json();
+  
+  // 篩選出「已到貨」的訂單進行發貨
+  readyOrders = allOrders.filter(o => o.status === '已到貨');
+  
+  const listDiv = document.getElementById("dispatch-list");
+  if (readyOrders.length === 0) {
+    listDiv.innerHTML = "<p style='text-align:center; color:#888;'>目前沒有已到貨的訂單</p>";
+    document.querySelector(".btn-pdf").style.display = "none";
+    return;
+  }
+
+  listDiv.innerHTML = readyOrders.map(o => `
+    <div class="order-card">
+      <div style="display:flex; justify-content:space-between;">
+        <strong>${o.buyerName}</strong>
+        <span class="badge">已到貨</span>
+      </div>
+      <div style="margin-top:5px; color:#555;">
+        ${o.productName} x ${o.qty}<br>
+        <small>訂單編號: ${o.orderId}</small>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function generatePDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({
+    unit: 'mm',
+    format: [80, 50] // 設定為常見的小標籤尺寸 (80mm x 50mm)
+  });
+
+  readyOrders.forEach((order, index) => {
+    if (index > 0) doc.addPage([80, 50]);
+    
+    // 設定字體大小與內容 (注意：jsPDF 原生對中文支援需加載字體檔，此處先以英文/數字架構示範)
+    doc.setFontSize(14);
+    doc.text(`Buyer: ${order.buyerName}`, 10, 15);
+    doc.setFontSize(10);
+    doc.text(`Product: ${order.productName}`, 10, 25);
+    doc.text(`Qty: ${order.qty}`, 10, 32);
+    doc.text(`ID: ${order.orderId}`, 10, 42);
+    
+    // 繪製裁切線框
+    doc.rect(5, 5, 70, 40); 
+  });
+
+  doc.save(`Dispatch_Labels_${new Date().toISOString().slice(0,10)}.pdf`);
+  alert("PDF 標籤已產生並下載！");
+}
+
+window.onload = init;
+</script>
+</body>
+</html>
