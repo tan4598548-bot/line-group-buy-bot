@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8"><title>系統設定</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f0f2f5; }
+    .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    .btn-save { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 8px; font-weight: bold; }
+    .back { display: block; margin-bottom: 15px; text-decoration: none; color: #666; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <a href="liff-admin-dashboard.html" class="back">❮ 返回管理中心</a>
+  <h3>⚙️ 系統設定</h3>
+  
+  <div class="card">
+    <label><b>管理員 LINE ID (逗號隔開)</b></label>
+    <textarea id="adminList" rows="3" style="width:100%; margin-top:10px;"></textarea>
+  </div>
+
+  <div class="card">
+    <label><b>系統狀態</b></label><br><br>
+    <input type="checkbox" id="sysStatus" checked> 接受新訂單 (維修時請關閉)
+  </div>
+
+  <button class="btn-save" onclick="saveSettings()">💾 儲存設定</button>
+
+<script>
+async function init() {
+  await liff.init({ liffId: "2008857998-jbKsKkPY" });
+  // 此處應從 API 讀取目前設定
+  document.getElementById('adminList').value = "U123456, U789012";
+}
+function saveSettings() {
+  alert("設定已更新！");
+  location.href = "liff-admin-dashboard.html";
+}
+init();
+</script>
+</body>
+</html>

@@ -1,78 +1,63 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <title>發貨列印</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8"><title>發貨作業</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    .order-item { border-bottom: 1px solid #eee; padding: 10px 0; }
-    button { background: #007bff; color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; font-weight: bold; margin-top: 15px; }
+    body { font-family: sans-serif; padding: 15px; background: #f8f9fa; }
+    .nav { margin-bottom: 15px; } .btn-back { color: #007bff; text-decoration: none; font-weight: bold; }
+    .ship-card { background: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; align-items: center; border: 1px solid #eee; }
+    .ship-card input { width: 22px; height: 22px; margin-right: 15px; }
+    .info { flex: 1; } .info b { color: #333; } .info small { color: #888; }
+    .footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
+    .btn-pdf { width: 100%; padding: 15px; background: #e44d26; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; }
   </style>
 </head>
 <body>
-  <h2>🚚 出貨發貨清單</h2>
-  <div id="list">載入中...</div>
-  <button onclick="ship()">📄 產生發貨 PDF</button>
+  <div class="nav"><a href="liff-admin-dashboard.html" class="btn-back">❮ 返回管理中心</a></div>
+  <h3>🚚 發貨清單 (勾選產單)</h3>
+  <div style="margin-bottom:10px;"><button onclick="toggleAll()">全選 / 全取消</button></div>
+  <div id="shipList" style="padding-bottom: 80px;">載入中...</div>
+
+  <div class="footer">
+    <button class="btn-pdf" onclick="generatePDF()">📄 產生發貨 PDF 小紙張</button>
+  </div>
 
 <script>
-let adminUserId = "";
-let orders = [];
-
 async function init() {
-  await liff.init({ liffId: "2008857998-HUEXLkgO" });
-  if (!liff.isLoggedIn()) { liff.login(); return; }
-  const profile = await liff.getProfile();
-  adminUserId = profile.userId;
-
-  const res = await fetch("/api/admin/shipping-list", {
-    headers: { "x-liff-user-id": adminUserId }
-  });
-
-  if (!res.ok) {
-    alert("權限錯誤");
-    liff.closeWindow();
-    return;
-  }
-
-  orders = await res.json();
-  render();
+  await liff.init({ liffId: "2008857998-jbKsKkPY" });
+  loadShippingData();
 }
 
-function render() {
-  const el = document.getElementById("list");
-  if(orders.length === 0) { el.innerHTML = "無待出貨訂單"; return; }
-  el.innerHTML = orders.map(o => `
-    <div class="order-item">
-      <label>
-        <input type="checkbox" value="${o.orderId}">
-        <strong>${o.buyerName}</strong>: ${o.productName} (${o.qty}件)
-      </label>
+async function loadShippingData() {
+  const p = await liff.getProfile();
+  // 抓取狀態為「已到貨」待發貨的訂單
+  const res = await fetch("/api/admin/orders?status=arrived", { headers: { "x-liff-user-id": p.userId } });
+  const data = await res.json();
+  document.getElementById("shipList").innerHTML = data.map(o => `
+    <div class="ship-card">
+      <input type="checkbox" class="order-check" value="${o.order_id}">
+      <div class="info">
+        <b>${o.buyer_name}</b> - ${o.product_name}<br>
+        <small>規格: ${o.color}/${o.size} | 數量: ${o.qty}</small>
+      </div>
     </div>
   `).join("");
 }
 
-async function ship() {
-  const ids = [...document.querySelectorAll("input:checked")].map(i => i.value);
-  if (!ids.length) return alert("請選擇訂單");
+function toggleAll() {
+  const checks = document.querySelectorAll('.order-check');
+  const allChecked = Array.from(checks).every(c => c.checked);
+  checks.forEach(c => c.checked = !allChecked);
+}
 
-  const res = await fetch("/api/admin/ship", {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
-      "x-liff-user-id": adminUserId 
-    },
-    body: JSON.stringify({ orderIds: ids })
-  });
-
-  const data = await res.json();
-  if(data.pdfUrl) {
-    window.open(data.pdfUrl, "_blank");
-    location.reload();
-  } else {
-    alert("產生失敗");
-  }
+async function generatePDF() {
+  const selectedIds = Array.from(document.querySelectorAll('.order-check:checked')).map(c => c.value);
+  if (selectedIds.length === 0) return alert("請至少勾選一筆訂單");
+  
+  // 跳轉至後端 PDF 生成路由
+  window.location.href = `/api/admin/generate-pdf?ids=${selectedIds.join(',')}`;
 }
 init();
 </script>
