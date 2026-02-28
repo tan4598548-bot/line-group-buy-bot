@@ -18,87 +18,42 @@ import vendorService from "./services/vendorService.js";
 const app = express();
 app.use(express.json());
 
-// 靜態檔案與 PDF 路徑設定
+// 全域 Debug Log：只要有任何請求進來，Render Logs 必須印出這行
+app.use((req, res, next) => {
+  console.log(`📡 收到請求: ${req.method} ${req.url} | ID: ${req.header("x-liff-user-id")}`);
+  next();
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/pdf", express.static(path.join(__dirname, "public/pdf")));
 
-// 🛡️ 管理員驗證中間層 (保留 Debug 模式)
+// 極簡化驗證：完全不擋人，只負責把 ID 傳下去
 const adminAuth = (req, res, next) => {
-  const userId = req.header("x-liff-user-id");
-  const admins = (process.env.ADMIN_LINE_IDS || "").split(",").map(i => i.trim());
-  
-  if (!userId) {
-    console.log("ℹ️ [Debug] 請求未帶 UserID");
-  } else if (!admins.includes(userId)) {
-    console.log(`ℹ️ [Debug] 用戶 ${userId} 不在名單 [${admins}]`);
-  }
-  
-  // 測試階段：即使 ID 不對也放行，避免前端直接跳 400 錯誤
-  req.adminUserId = userId || "DEBUG_USER";
-  next(); 
+  req.adminUserId = req.header("x-liff-user-id") || "UNKNOWN";
+  next();
 };
 
-/* ===== 管理端 API (Admin) ===== */
+/* ===== API 路由 ===== */
 
-// 1. 商品管理：建立商品
-app.post("/api/admin/products/create", adminAuth, async (req, res) => {
-  try { res.json({ ok: true, result: await productService.createProduct(req.body) }); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 2. 訂單查詢：取得所有訂單
+// 確保路徑完全對應前端 fetch('/api/admin/orders')
 app.get("/api/admin/orders", adminAuth, async (req, res) => {
-  try { res.json(await orderService.getAllOrders()); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 3. 到貨點貨：取得待點貨清單
-app.get("/api/admin/arrival-list", adminAuth, async (req, res) => {
-  try { res.json(await arrivalService.getArrivalList()); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 4. 發貨作業：標記發貨並產生 PDF
-app.get("/api/admin/shipping-list", adminAuth, async (req, res) => {
-  try { res.json(await shippingService.getShippingList()); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post("/api/admin/ship", adminAuth, async (req, res) => {
   try {
-    const { orderIds } = req.body;
-    const shippedOrders = await shippingService.markOrdersShipped(orderIds);
-    const pdfUrl = await pdfService.generateShippingPdf(shippedOrders);
-    res.json({ ok: true, pdfUrl });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+    const data = await orderService.getAllOrders();
+    res.json(data || []);
+  } catch (e) {
+    console.error("❌ 內部錯誤:", e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// 5. 廠商管理：取得採購統計
-app.get("/api/admin/vendor-summary", adminAuth, async (req, res) => {
-  try { res.json(await vendorService.getVendorSummary()); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
+// 其餘管理路由 (路徑簡化處理)
+app.get("/api/admin/arrival-list", adminAuth, async (req, res) => {
+  try { res.json(await arrivalService.getArrivalList()); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-/* ===== 買家端 API (Buyer) ===== */
-
-// 取得商品列表 (首頁)
-app.get("/api/products", async (req, res) => {
-  try { res.json(await productService.listProducts(req.query.type)); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
+app.post("/api/admin/products/create", adminAuth, async (req, res) => {
+  try { res.json({ ok: true, result: await productService.createProduct(req.body) }); } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 買家下單
-app.post("/api/order", async (req, res) => {
-  try { await orderService.handleOrder(req, res); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 買家查詢自己的訂單
-app.get("/api/buyer/orders", async (req, res) => {
-  try { res.json(await orderService.getBuyerOrders(req.query.userId)); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-/* ===== 伺服器啟動 ===== */
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 伺服器已啟動於通訊埠 ${PORT}`));

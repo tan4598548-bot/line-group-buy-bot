@@ -6,26 +6,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 15px; background: #f4f4f7; color: #333; }
-    .nav { margin-bottom: 15px; } 
-    .btn-back { color: #007bff; text-decoration: none; font-weight: bold; }
-    .order-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 5px solid #06c755; }
-    .status-msg { padding: 20px; color: #666; text-align: center; font-size: 14px; }
-    .error-box { background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322; padding: 15px; border-radius: 6px; margin-top: 20px; }
-    .id-info { font-size: 10px; color: #999; margin-top: 10px; word-break: break-all; }
+    body { font-family: sans-serif; padding: 15px; background: #f4f4f7; }
+    .nav { margin-bottom: 15px; } .btn-back { color: #007bff; text-decoration: none; }
+    .order-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    #statusMsg { text-align: center; padding: 20px; color: #666; }
+    .error-box { background: #fee; border: 1px solid #fcc; color: #c33; padding: 15px; border-radius: 8px; margin-top: 10px; font-size: 14px; line-height: 1.5; }
   </style>
 </head>
 <body>
   <div class="nav"><a href="liff-admin-dashboard.html" class="btn-back">❮ 返回管理中心</a></div>
   <h3>📑 訂單/結單管理</h3>
-  <div id="statusMsg" class="status-msg">📡 正在檢查權限...</div>
+  <div id="statusMsg">⚙️ 正在連線中...</div>
   <div id="orderList"></div>
 
   <script>
     async function main() {
       const statusMsg = document.getElementById("statusMsg");
       try {
-        // 使用圖片中「我的商品詳細」的正確 ID
+        // 使用您圖片中的「我的商品詳細」正確 ID
         await liff.init({ liffId: "2008857998-wtK5loPp" });
         
         if (!liff.isLoggedIn()) {
@@ -34,57 +32,45 @@
         }
 
         const profile = await liff.getProfile();
-        statusMsg.innerText = "📡 正在向伺服器請求資料...";
-        await fetchOrders(profile.userId);
-
-      } catch (err) {
-        showError("LIFF 初始化失敗: " + err.message);
-      }
-    }
-
-    async function fetchOrders(userId) {
-      try {
-        const res = await fetch("/api/admin/orders", {
-          headers: { "x-liff-user-id": userId }
+        statusMsg.innerText = "📡 讀取資料中...";
+        
+        // 關鍵修正：確保 URL 是絕對路徑，並處理 Header
+        const response = await fetch("/api/admin/orders", {
+          method: "GET",
+          headers: {
+            "Accept": "application/json",
+            "x-liff-user-id": profile.userId
+          }
         });
 
-        if (!res.ok) {
-          const errorData = await res.json();
-          // 如果是 400，通常是 ID 不在環境變數名單中
-          throw new Error(errorData.error || `管理員驗證失敗 (代碼: ${res.status})`);
+        if (!response.ok) {
+          throw new Error(`伺服器回應錯誤 (${response.status})。請確認您的 Render Logs 是否有看到「📡 收到請求」字樣。`);
         }
 
-        const orders = await res.json();
-        renderOrders(orders);
+        const orders = await response.json();
+        if (orders.length === 0) {
+          statusMsg.innerText = "✨ 目前尚無訂單。";
+          return;
+        }
+
+        statusMsg.style.display = "none";
+        document.getElementById("orderList").innerHTML = orders.map(o => `
+          <div class="order-card">
+            <strong>${o.productName || '未知商品'}</strong><br>
+            <small>買家: ${o.buyerName || '匿名'} | 數量: ${o.qty || 0}</small>
+          </div>
+        `).join("");
+
       } catch (err) {
-        // 報錯時顯示您的 LINE ID，方便您對照環境變數
-        showError(`${err.message}<br><div class="id-info">您的 ID: ${userId}</div>`);
+        document.getElementById("statusMsg").style.display = "none";
+        document.getElementById("orderList").innerHTML = `
+          <div class="error-box">
+            <strong>⚠️ 發生錯誤</strong><br>
+            原因: ${err.message}<br><br>
+            <em>提示：如果 Logs 沒訊息但報 400，請確認您的 SPREADSHEET_ID 是否正確填入 Render 環境變數。</em>
+          </div>`;
       }
     }
-
-    function renderOrders(orders) {
-      const container = document.getElementById("orderList");
-      const statusMsg = document.getElementById("statusMsg");
-      
-      if (!orders || orders.length === 0) {
-        statusMsg.innerText = "✨ 目前沒有待處理訂單。";
-        return;
-      }
-
-      statusMsg.style.display = "none";
-      container.innerHTML = orders.map(o => `
-        <div class="order-card">
-          <strong>${o.productName || '未名商品'}</strong><br>
-          <small>買家: ${o.buyerName} | 數量: ${o.qty}</small>
-        </div>
-      `).join("");
-    }
-
-    function showError(msg) {
-      document.getElementById("statusMsg").style.display = "none";
-      document.getElementById("orderList").innerHTML = `<div class="error-box"><strong>⚠️ 權限或系統錯誤</strong><br>${msg}</div>`;
-    }
-
     window.onload = main;
   </script>
 </body>
