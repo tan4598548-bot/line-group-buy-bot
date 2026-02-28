@@ -1,44 +1,113 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8"><title>訂單與結單管理</title>
+  <meta charset="UTF-8">
+  <title>訂單與結單管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 15px; background: #f4f4f7; }
-    .nav { margin-bottom: 15px; } .btn-back { color: #007bff; text-decoration: none; font-weight: bold; }
-    .order-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    .btn-group { margin-top: 10px; display: flex; gap: 5px; }
-    .btn { padding: 8px 12px; border: none; border-radius: 6px; font-size: 12px; color: white; cursor: pointer; }
-    .btn-close { background: #333; } .btn-out { background: #dc3545; }
+    body { font-family: sans-serif; padding: 15px; background: #f4f4f7; color: #333; }
+    .nav { margin-bottom: 15px; } 
+    .btn-back { color: #007bff; text-decoration: none; font-weight: bold; display: inline-block; padding: 5px 0; }
+    .order-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 5px solid #06c755; }
+    .order-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .product-name { font-weight: bold; font-size: 16px; color: #000; }
+    .order-info { font-size: 13px; color: #666; line-height: 1.6; }
+    .btn-group { margin-top: 12px; display: flex; gap: 8px; }
+    .btn { flex: 1; padding: 10px; border: none; border-radius: 6px; font-size: 13px; color: white; cursor: pointer; transition: opacity 0.2s; }
+    .btn:active { opacity: 0.7; }
+    .btn-close { background: #333; } 
+    .btn-out { background: #dc3545; }
+    #statusMsg { padding: 10px; color: #666; text-align: center; }
+    .error-box { background: #fff1f0; border: 1px solid #ffa39e; color: #cf1322; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 14px; }
   </style>
 </head>
 <body>
-  <div class="nav"><a href="liff-admin-dashboard.html" class="btn-back">❮ 返回管理中心</a></div>
+  <div class="nav">
+    <a href="liff-admin-dashboard.html" class="btn-back">❮ 返回管理中心</a>
+  </div>
+  
   <h3>📑 訂單/結單管理</h3>
-  <div id="orderList">載入中...</div>
+  <div id="statusMsg">正在初始化 LIFF...</div>
+  <div id="orderList"></div>
 
-<script>
-async function init() {
-  await liff.init({ liffId: "2008857998-jbKsKkPY" });
-  loadOrders();
-}
-async function loadOrders() {
-  const p = await liff.getProfile();
-  const res = await fetch("/api/admin/orders", { headers: { "x-liff-user-id": p.userId } });
-  const data = await res.json();
-  document.getElementById("orderList").innerHTML = data.map(o => `
-    <div class="order-card">
-      <div><strong>${o.product_name}</strong> (${o.color}/${o.size})</div>
-      <div style="font-size:13px; color:#666;">買家: ${o.buyer_name} | 數量: ${o.qty}</div>
-      <div class="btn-group">
-        <button class="btn btn-close" onclick="alert('已轉入採購清單')">結單轉出</button>
-        <button class="btn btn-out" onclick="alert('已發送斷貨通知')">❌ 斷貨處理</button>
-      </div>
-    </div>
-  `).join("");
-}
-init();
-</script>
-</body>
-</html>
+  <script>
+    // 初始化 LIFF
+    async function init() {
+      try {
+        await liff.init({ liffId: "2008857998-jbKsKkPY" });
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+        document.getElementById("statusMsg").innerText = "正在載入訂單資料...";
+        await loadOrders();
+      } catch (err) {
+        showError("LIFF 初始化失敗: " + err.message);
+      }
+    }
+
+    // 載入訂單主邏輯
+    async function loadOrders() {
+      try {
+        const profile = await liff.getProfile();
+        const response = await fetch("/api/admin/orders", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "x-liff-user-id": profile.userId
+          }
+        });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || `HTTP 錯誤碼: ${response.status}`);
+        }
+
+        const orders = await response.json();
+        const container = document.getElementById("orderList");
+        const statusMsg = document.getElementById("statusMsg");
+
+        if (!orders || orders.length === 0) {
+          statusMsg.innerText = "📭 目前尚無任何訂單資料。";
+          return;
+        }
+
+        statusMsg.style.display = "none";
+        container.innerHTML = orders.map(o => `
+          <div class="order-card">
+            <div class="order-header">
+              <div class="product-name">${o.productName || '未名商品'}</div>
+              <div style="font-size:12px; color:#999;">${o.createdAt ? new Date(o.createdAt).toLocaleDateString() : ''}</div>
+            </div>
+            <div class="order-info">
+              規格: <span style="color:#333;">${o.color || '-'}/${o.size || '-'}</span><br>
+              買家: <span style="color:#333;">${o.buyerName || '未知'}</span><br>
+              數量: <span style="color:#06c755; font-weight:bold;">${o.qty || 0}</span> | 狀態: ${translateStatus(o.status)}
+            </div>
+            <div class="btn-group">
+              <button class="btn btn-close" onclick="handleAction('${o.orderId}', 'close')">結單轉出</button>
+              <button class="btn btn-out" onclick="handleAction('${o.orderId}', 'cancel')">❌ 斷貨處理</button>
+            </div>
+          </div>
+        `).join("");
+
+      } catch (err) {
+        showError("載入訂單失敗: " + err.message);
+      }
+    }
+
+    function translateStatus(status) {
+      const map = { 'ordered': '已下單', 'arrived': '已到貨', 'shipped': '已發貨' };
+      return map[status] || status;
+    }
+
+    function showError(msg) {
+      const container = document.getElementById("orderList");
+      const statusMsg = document.getElementById("statusMsg");
+      statusMsg.style.display = "none";
+      container.innerHTML = `<div class="error-box">⚠️ ${msg}</div>`;
+    }
+
+    async function handleAction(orderId, type) {
+      alert(`功能開發中...\n訂單編號: ${order
