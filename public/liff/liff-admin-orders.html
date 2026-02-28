@@ -2,28 +2,31 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>訂單與結單管理</title>
+  <title>訂單管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body { font-family: sans-serif; padding: 15px; background: #f4f4f7; }
-    .nav { margin-bottom: 15px; } .btn-back { color: #007bff; text-decoration: none; }
+    .nav { margin-bottom: 15px; } .btn-back { color: #007bff; text-decoration: none; font-weight: bold; }
     .order-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    #statusMsg { text-align: center; padding: 20px; color: #666; }
-    .error-box { background: #fee; border: 1px solid #fcc; color: #c33; padding: 15px; border-radius: 8px; margin-top: 10px; font-size: 14px; line-height: 1.5; }
+    .error-box { background: #fee; border: 1px solid #fcc; color: #c33; padding: 15px; border-radius: 8px; margin-top: 10px; }
+    .id-debug { font-size: 10px; color: #ccc; margin-top: 20px; text-align: center; }
   </style>
 </head>
 <body>
   <div class="nav"><a href="liff-admin-dashboard.html" class="btn-back">❮ 返回管理中心</a></div>
   <h3>📑 訂單/結單管理</h3>
-  <div id="statusMsg">⚙️ 正在連線中...</div>
-  <div id="orderList"></div>
+  <div id="status">⚙️ 系統初始化中...</div>
+  <div id="list"></div>
+  <div id="debugInfo" class="id-debug"></div>
 
   <script>
-    async function main() {
-      const statusMsg = document.getElementById("statusMsg");
+    async function start() {
+      const status = document.getElementById("status");
+      const debugInfo = document.getElementById("debugInfo");
+      
       try {
-        // 使用您圖片中的「我的商品詳細」正確 ID
+        // 1. 初始化 LIFF (對齊 ID: 我的商品詳細)
         await liff.init({ liffId: "2008857998-wtK5loPp" });
         
         if (!liff.isLoggedIn()) {
@@ -31,47 +34,67 @@
           return;
         }
 
-        const profile = await liff.getProfile();
-        statusMsg.innerText = "📡 讀取資料中...";
+        // 2. 強制等待 Profile 載入
+        status.innerText = "🔑 正在識別身分...";
+        let profile = null;
+        let retryCount = 0;
         
-        // 關鍵修正：確保 URL 是絕對路徑，並處理 Header
-        const response = await fetch("/api/admin/orders", {
+        while (!profile && retryCount < 5) {
+          try {
+            profile = await liff.getProfile();
+          } catch (e) {
+            retryCount++;
+            await new Promise(r => setTimeout(r, 500)); // 等 0.5 秒再試
+          }
+        }
+
+        if (!profile || !profile.userId) {
+          throw new Error("無法取得 LINE UID，請重新開啟頁面");
+        }
+
+        const userId = profile.userId;
+        debugInfo.innerText = "Current UID: " + userId;
+
+        // 3. 發送請求 (明確帶入 userId)
+        status.innerText = "📡 正在連線後端...";
+        const res = await fetch("/api/admin/orders", {
           method: "GET",
           headers: {
-            "Accept": "application/json",
-            "x-liff-user-id": profile.userId
+            "Content-Type": "application/json",
+            "x-liff-user-id": String(userId).trim() // 強制轉字串並去空白
           }
         });
 
-        if (!response.ok) {
-          throw new Error(`伺服器回應錯誤 (${response.status})。請確認您的 Render Logs 是否有看到「📡 收到請求」字樣。`);
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.error || `伺服器回應錯誤 (${res.status})`);
         }
 
-        const orders = await response.json();
-        if (orders.length === 0) {
-          statusMsg.innerText = "✨ 目前尚無訂單。";
+        const data = await res.json();
+        status.style.display = "none";
+
+        if (!data || data.length === 0) {
+          document.getElementById("list").innerHTML = "📭 目前暫無任何訂單。";
           return;
         }
 
-        statusMsg.style.display = "none";
-        document.getElementById("orderList").innerHTML = orders.map(o => `
+        document.getElementById("list").innerHTML = data.map(o => `
           <div class="order-card">
-            <strong>${o.productName || '未知商品'}</strong><br>
-            <small>買家: ${o.buyerName || '匿名'} | 數量: ${o.qty || 0}</small>
+            <strong>${o.productName || '未命名商品'}</strong><br>
+            <small>買家: ${o.buyerName || '未知'} | 數量: ${o.qty || 0}</small>
           </div>
         `).join("");
 
       } catch (err) {
-        document.getElementById("statusMsg").style.display = "none";
-        document.getElementById("orderList").innerHTML = `
+        status.style.display = "none";
+        document.getElementById("list").innerHTML = `
           <div class="error-box">
-            <strong>⚠️ 發生錯誤</strong><br>
-            原因: ${err.message}<br><br>
-            <em>提示：如果 Logs 沒訊息但報 400，請確認您的 SPREADSHEET_ID 是否正確填入 Render 環境變數。</em>
+            <strong>⚠️ 存取失敗</strong><br>原因: ${err.message}
           </div>`;
+        console.error("Init Error:", err);
       }
     }
-    window.onload = main;
+    window.onload = start;
   </script>
 </body>
 </html>

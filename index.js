@@ -1,59 +1,37 @@
-import express from "express";
-import path from "path";
-import { fileURLToPath } from "url";
-import dotenv from "dotenv";
-
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-import productService from "./services/productService.js";
-import orderService from "./services/orderService.js";
-import shippingService from "./services/shippingService.js";
-import arrivalService from "./services/arrivelService.js";
-import pdfService from "./services/pdfService.js";
-import vendorService from "./services/vendorService.js";
+// ... (保留前面 import 內容)
 
 const app = express();
 app.use(express.json());
 
-// 全域 Debug Log：只要有任何請求進來，Render Logs 必須印出這行
+// 確保 public 是根目錄，且子資料夾 liff 被正確映射
+app.use(express.static(path.join(__dirname, "public")));
+app.use("/liff", express.static(path.join(__dirname, "public/liff")));
+
+// Debug 中間層：如果 ID 還是 undefined，這裡會直接攔截並提示
 app.use((req, res, next) => {
-  console.log(`📡 收到請求: ${req.method} ${req.url} | ID: ${req.header("x-liff-user-id")}`);
+  const userId = req.header("x-liff-user-id");
+  if (req.url.startsWith("/api/admin")) {
+    console.log(`[API Log] ${req.method} ${req.url} | Header ID: ${userId}`);
+  }
   next();
 });
 
-app.use(express.static(path.join(__dirname, "public")));
-app.use("/pdf", express.static(path.join(__dirname, "public/pdf")));
+// 核心 API 路由
+app.get("/api/admin/orders", async (req, res) => {
+  const userId = req.header("x-liff-user-id");
+  
+  // 如果 ID 依然是 undefined，回傳明確錯誤給前端
+  if (!userId || userId === "undefined") {
+    return res.status(400).json({ error: "前端未傳送有效的 LINE ID" });
+  }
 
-// 極簡化驗證：完全不擋人，只負責把 ID 傳下去
-const adminAuth = (req, res, next) => {
-  req.adminUserId = req.header("x-liff-user-id") || "UNKNOWN";
-  next();
-};
-
-/* ===== API 路由 ===== */
-
-// 確保路徑完全對應前端 fetch('/api/admin/orders')
-app.get("/api/admin/orders", adminAuth, async (req, res) => {
   try {
-    const data = await orderService.getAllOrders();
-    res.json(data || []);
+    const orders = await orderService.getAllOrders();
+    res.json(orders || []);
   } catch (e) {
-    console.error("❌ 內部錯誤:", e);
+    console.error("Orders Error:", e);
     res.status(500).json({ error: e.message });
   }
 });
 
-// 其餘管理路由 (路徑簡化處理)
-app.get("/api/admin/arrival-list", adminAuth, async (req, res) => {
-  try { res.json(await arrivalService.getArrivalList()); } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post("/api/admin/products/create", adminAuth, async (req, res) => {
-  try { res.json({ ok: true, result: await productService.createProduct(req.body) }); } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 伺服器已啟動於通訊埠 ${PORT}`));
+// ... (其他路由保持不變)
