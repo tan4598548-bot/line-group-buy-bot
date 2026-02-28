@@ -36,24 +36,26 @@ export const sheetService = {
     } catch (e) { return []; }
   },
 
-  // 2. 完整寫入商品 (A-M 欄位對齊)
+  // 2. 完整進階寫入邏輯
   async appendProduct(data) {
     try {
-      // 依照 Google Sheet 欄位順序排列
+      // 組合顏色與尺寸為單一規格字串
+      const fullSpecs = `顏色:${data.colorMap} | 尺寸:${data.sizeMap}`;
+      
       const rowValue = [
         data.productCode,   // A: 商品代碼
         data.productName,   // B: 商品名稱
-        data.colorMap,      // C: 顏色對照
+        fullSpecs,          // C: 規格對照 (整合顏色與尺寸)
         data.price,         // D: 單價
-        'TRUE',             // E: 是否上架 (預設 TRUE)
+        'TRUE',             // E: 是否上架
         data.closeDate,     // F: 結單日
-        'FALSE',            // G: 已提醒 (預設 FALSE)
-        data.detailText,    // H: detailText
+        'FALSE',            // G: 已提醒
+        `成本:${data.cost}`, // H: detailText (將成本存入描述區備註)
         data.images,        // I: images
-        data.youtube,       // J: youtube
+        '',                 // J: youtube
         '',                 // K: video
-        data.type,          // L: type
-        '0'                 // M: total_stock
+        data.type,          // L: type (normal/overstock)
+        data.total_stock    // M: total_stock (現貨庫存)
       ];
 
       await sheets.spreadsheets.values.append({
@@ -69,7 +71,7 @@ export const sheetService = {
     }
   },
 
-  // 3. 刪除商品
+  // 3. 刪除商品邏輯
   async deleteProduct(productCode) {
     try {
       const response = await sheets.spreadsheets.values.get({ 
@@ -97,7 +99,7 @@ export const sheetService = {
     } catch (e) { throw e; }
   },
 
-  // 4. 讀取訂單列表
+  // 4. 讀取所有訂單
   async getOrders() {
     try {
       const response = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:M' });
@@ -110,11 +112,8 @@ export const sheetService = {
           return (index !== -1 && row[index]) ? row[index] : '';
         };
         return { 
-          orderId: getVal('order_ID'), 
-          productName: getVal('product_name'), 
-          buyerName: getVal('buyer_name'), 
-          qty: getVal('qty'), 
-          status: getVal('status') 
+          orderId: getVal('order_ID'), productName: getVal('product_name'), 
+          buyerName: getVal('buyer_name'), qty: getVal('qty'), status: getVal('status') 
         };
       });
     } catch (e) { return []; }

@@ -2,68 +2,58 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>上架新商品</title>
+  <title>新增團購商品</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body { font-family: -apple-system, "Microsoft JhengHei", sans-serif; background: #f8f9fa; padding: 20px; margin: 0; color: #333; }
-    h3 { display: flex; align-items: center; font-size: 24px; margin-bottom: 20px; }
-    .form-group { margin-bottom: 20px; }
-    label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 18px; }
-    input, select, textarea { 
-      width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; 
+    h2 { display: flex; align-items: center; font-size: 24px; margin-bottom: 20px; }
+    .box-icon { width: 30px; margin-right: 10px; }
+    .form-group { margin-bottom: 15px; }
+    input, select { 
+      width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; 
       box-sizing: border-box; font-size: 16px; background: #fff;
     }
-    textarea { height: 100px; resize: vertical; }
     .btn-submit { 
-      background: #42b72a; color: white; border: none; width: 100%; 
-      padding: 15px; border-radius: 8px; font-size: 20px; font-weight: bold; 
+      background: #00c300; color: white; border: none; width: 100%; 
+      padding: 15px; border-radius: 6px; font-size: 18px; font-weight: bold; 
       margin-top: 10px; cursor: pointer;
     }
     .btn-submit:disabled { background: #ccc; }
   </style>
 </head>
 <body>
-  <h3>➕ 上架新商品</h3>
+  <h2>📦 新增團購商品</h2>
   <form id="productForm">
     <div class="form-group">
-      <label>商品代碼 (例: A001)</label>
-      <input type="text" id="productCode" placeholder="輸入商品代碼" required>
+      <input type="text" id="productName" placeholder="商品名稱" required>
     </div>
     <div class="form-group">
-      <label>商品名稱</label>
-      <input type="text" id="productName" placeholder="輸入商品名稱" required>
+      <input type="number" id="price" placeholder="單價" required>
     </div>
     <div class="form-group">
-      <label>單價</label>
-      <input type="number" id="price" placeholder="輸入單價" required>
+      <input type="number" id="cost" placeholder="成本設定 (輸入成本數字)">
     </div>
     <div class="form-group">
-      <label>類型</label>
+      <input type="text" id="colorMap" placeholder="規格 (如：紅色,藍色)">
+    </div>
+    <div class="form-group">
+      <input type="text" id="sizeMap" placeholder="尺寸 (如：S,M,L)">
+    </div>
+    <div class="form-group">
       <select id="type">
-        <option value="normal">預購</option>
-        <option value="overstock">現貨</option>
+        <option value="normal">預購 (Normal)</option>
+        <option value="overstock">現貨 (Overstock)</option>
       </select>
     </div>
     <div class="form-group">
-      <label>顏色對照 (例: C1:黑色,C2:白色)</label>
-      <input type="text" id="colorMap" placeholder="C1:顏色1,C2:顏色2">
+      <input type="number" id="total_stock" placeholder="現貨初始庫存 (預購填0)" value="0">
     </div>
     <div class="form-group">
-      <label>結單日 (YYYY-MM-DD)</label>
-      <input type="date" id="closeDate" required>
+      <input type="text" id="images" placeholder="圖片連結 (網址)">
     </div>
     <div class="form-group">
-      <label>詳細商品介紹</label>
-      <textarea id="detailText" placeholder="輸入商品描述..."></textarea>
-    </div>
-    <div class="form-group">
-      <label>圖片網址 (多張用逗號隔開)</label>
-      <input type="text" id="images" placeholder="https://...">
-    </div>
-    <div class="form-group">
-      <label>影音檔網址 (Youtube/Video)</label>
-      <input type="text" id="youtube" placeholder="https://youtube.com/...">
+      <input type="date" id="closeDate" title="結單日">
     </div>
 
     <button type="submit" class="btn-submit" id="submitBtn">確認上架</button>
@@ -72,7 +62,7 @@
   <script>
     async function init() {
       try {
-        await liff.init({ liffId: "2008857998-AoqmEajq" }); // 延用管理端 ID
+        await liff.init({ liffId: "2008857998-AoqmEajq" }); 
       } catch (err) { console.error("LIFF Init Error", err); }
     }
 
@@ -80,18 +70,22 @@
       e.preventDefault();
       const btn = document.getElementById("submitBtn");
       btn.disabled = true;
-      btn.innerText = "處理中...";
+      btn.innerText = "正在同步至試算表...";
+
+      // 自動產生簡易代碼或讓後端處理
+      const productCode = "P" + Date.now().toString().slice(-6);
 
       const payload = {
-        productCode: document.getElementById("productCode").value,
+        productCode: productCode,
         productName: document.getElementById("productName").value,
         price: document.getElementById("price").value,
+        cost: document.getElementById("cost").value, // 成本
+        colorMap: document.getElementById("colorMap").value, // 顏色
+        sizeMap: document.getElementById("sizeMap").value,   // 尺寸
         type: document.getElementById("type").value,
-        colorMap: document.getElementById("colorMap").value,
-        closeDate: document.getElementById("closeDate").value,
-        detailText: document.getElementById("detailText").value,
+        total_stock: document.getElementById("total_stock").value,
         images: document.getElementById("images").value,
-        youtube: document.getElementById("youtube").value
+        closeDate: document.getElementById("closeDate").value
       };
 
       try {
@@ -103,7 +97,7 @@
         if (res.ok) {
           alert("✅ 商品已成功完整上架！");
           location.href = "liff-admin-product.html";
-        } else { alert("❌ 上架失敗，請檢查資料"); }
+        } else { alert("❌ 上架失敗"); }
       } catch (err) { alert("錯誤: " + err.message); }
       finally { btn.disabled = false; btn.innerText = "確認上架"; }
     };
