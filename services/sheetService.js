@@ -1,6 +1,5 @@
 import { google } from 'googleapis';
 
-// 初始化 Google Sheets API
 const auth = new google.auth.GoogleAuth({
   credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON),
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
@@ -35,7 +34,7 @@ export const sheetService = {
           productName: getVal('商品名稱'), // B 欄
           colorMap: getVal('顏色對照'),    // C 欄
           price: Number(getVal('單價')) || 0, // D 欄
-          active: getVal('是否上架'),      // E 欄 (關鍵：前端用來過濾顯示)
+          active: getVal('是否上架'),      // E 欄
           closeDate: getVal('結單日'),     // F 欄
           images: getVal('images'),        // I 欄
           type: getVal('type') || 'normal' // L 欄
@@ -104,7 +103,7 @@ export const sheetService = {
           orderId: getVal('order_ID'),       // A 欄
           productCode: getVal('product_code'), // B 欄
           productName: getVal('product_name'), // C 欄
-          lineId: getVal('line_id'),           // D 欄 (關鍵：買家查詢訂單用)
+          lineId: getVal('line_id'),           // D 欄
           buyerName: getVal('buyer_name'),     // E 欄
           color: getVal('color'),              // F 欄
           size: getVal('size'),                // G 欄

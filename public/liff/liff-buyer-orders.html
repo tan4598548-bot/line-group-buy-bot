@@ -31,18 +31,16 @@ async function init() {
   const list = document.getElementById("list");
   
   try {
-    // 1. 初始化 LIFF (對齊您的買家入口 ID)
+    // 初始化 LIFF (買家入口)
     await liff.init({ liffId: "2008857998-jbKsKkPY" });
 
-    // 2. 獲取商品資料
     const res = await fetch("/api/products");
     if (!res.ok) throw new Error("無法取得商品資料");
     
     const data = await res.json();
     
-    // 3. 過濾已上架商品 (對齊您的 Google Sheet: 是否上架)
-    // 注意：後端 API 傳回時若標題是 snake_case，這裡要對應 p.is_active 或 p.active
-    const activeProducts = data.filter(p => p.active === 'TRUE' || p.active === true);
+    // 關鍵修正：對應 Google Sheet 內的 'TRUE' 字串內容
+    const activeProducts = data.filter(p => p.active === 'TRUE');
 
     if (activeProducts.length === 0) {
       status.innerText = "📭 目前暫時沒有開團中的商品。";
@@ -51,14 +49,14 @@ async function init() {
 
     status.style.display = "none";
     list.innerHTML = activeProducts.map(p => `
-      <a href="liff-order.html?code=${p.productCode || p.product_code}" class="item-row">
+      <a href="liff-order.html?code=${p.productCode}" class="item-row">
         <img src="${p.images ? p.images.split(',')[0] : 'https://via.placeholder.com/70'}" class="item-img">
         <div class="item-info">
           <div class="item-name">
             <span class="tag" style="background:${p.type==='overstock'?'#ff9500':'#007bff'}">
               ${p.type==='overstock'?'現貨':'預購'}
             </span>
-            ${p.productName || p.product_name}
+            ${p.productName}
           </div>
           <div class="item-price">$${p.price}</div>
         </div>
