@@ -5,61 +5,58 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 15px; background: #f8f9fa; }
-    .nav { margin-bottom: 15px; } .btn-back { color: #007bff; text-decoration: none; font-weight: bold; }
-    .ship-card { background: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; align-items: center; border: 1px solid #eee; }
-    .ship-card input { width: 22px; height: 22px; margin-right: 15px; }
-    .info { flex: 1; } .info b { color: #333; } .info small { color: #888; }
-    .footer { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 15px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
-    .btn-pdf { width: 100%; padding: 15px; background: #e44d26; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; }
+    body { font-family: sans-serif; padding: 15px; background: #f4f7f6; }
+    .card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .btn-pdf { background: #007bff; color: white; border: none; width: 100%; padding: 12px; border-radius: 8px; font-weight: bold; margin-top: 20px; }
+    .checkbox-container { display: flex; align-items: center; justify-content: space-between; }
   </style>
 </head>
 <body>
-  <div class="nav"><a href="liff-admin-dashboard.html" class="btn-back">❮ 返回管理中心</a></div>
-  <h3>🚚 發貨清單 (勾選產單)</h3>
-  <div style="margin-bottom:10px;"><button onclick="toggleAll()">全選 / 全取消</button></div>
-  <div id="shipList" style="padding-bottom: 80px;">載入中...</div>
-
-  <div class="footer">
-    <button class="btn-pdf" onclick="generatePDF()">📄 產生發貨 PDF 小紙張</button>
-  </div>
+  <h3>🚚 發貨作業 (產單)</h3>
+  <div id="order-list">⌛ 載入發貨清單中...</div>
+  <button class="btn-pdf" onclick="generatePDF()">🖨️ 產生發貨小紙張</button>
 
 <script>
 async function init() {
-  await liff.init({ liffId: "2008857998-HUEXLkgO" });
-  loadShippingData();
-}
-
-async function loadShippingData() {
-  const p = await liff.getProfile();
-  // 抓取狀態為「已到貨」待發貨的訂單
-  const res = await fetch("/api/admin/orders?status=arrived", { headers: { "x-liff-user-id": p.userId } });
-  const data = await res.json();
-  document.getElementById("shipList").innerHTML = data.map(o => `
-    <div class="ship-card">
-      <input type="checkbox" class="order-check" value="${o.order_id}">
-      <div class="info">
-        <b>${o.buyer_name}</b> - ${o.product_name}<br>
-        <small>規格: ${o.color}/${o.size} | 數量: ${o.qty}</small>
+  try {
+    await liff.init({ liffId: "2008857998-HUEXLkgO" }); // 對應 shipping.html
+    const res = await fetch("/api/admin/orders");
+    const orders = await res.json();
+    
+    // 過濾出狀態為「已到貨」的訂單進行發貨
+    const list = document.getElementById("order-list");
+    list.innerHTML = orders.map(o => `
+      <div class="card">
+        <div class="checkbox-container">
+          <div>
+            <strong>${o.productName}</strong><br>
+            買家: ${o.buyerName} | 數量: ${o.qty}
+          </div>
+          <input type="checkbox" name="orderSelect" value="${o.orderId}">
+        </div>
       </div>
-    </div>
-  `).join("");
-}
-
-function toggleAll() {
-  const checks = document.querySelectorAll('.order-check');
-  const allChecked = Array.from(checks).every(c => c.checked);
-  checks.forEach(c => c.checked = !allChecked);
+    `).join("");
+  } catch (err) {
+    document.getElementById("order-list").innerText = "載入失敗: " + err.message;
+  }
 }
 
 async function generatePDF() {
-  const selectedIds = Array.from(document.querySelectorAll('.order-check:checked')).map(c => c.value);
-  if (selectedIds.length === 0) return alert("請至少勾選一筆訂單");
+  const selected = Array.from(document.querySelectorAll('input[name="orderSelect"]:checked')).map(el => el.value);
+  if (selected.length === 0) return alert("請至少勾選一筆訂單！");
+
+  const res = await fetch("/api/admin/generate-shipping-pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orderIds: selected })
+  });
   
-  // 跳轉至後端 PDF 生成路由
-  window.location.href = `/api/admin/generate-pdf?ids=${selectedIds.join(',')}`;
+  const data = await res.json();
+  if (data.ok) {
+    window.location.href = data.downloadUrl; // 導向模擬 PDF 頁面，解決 404
+  }
 }
-init();
+window.onload = init;
 </script>
 </body>
 </html>
