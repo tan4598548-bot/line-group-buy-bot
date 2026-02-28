@@ -2,96 +2,101 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>商品管理系統</title>
+  <title>商品管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body { font-family: sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
     .product-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    .product-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
-    .product-title { font-weight: bold; font-size: 16px; color: #1c1e21; }
-    .product-info { font-size: 13px; color: #606770; line-height: 1.6; }
-    .tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; }
-    .actions { display: flex; gap: 10px; margin-top: 15px; border-top: 1px solid #eee; pt: 10px; padding-top: 10px;}
-    .btn { flex: 1; padding: 8px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; }
+    .actions { display: flex; gap: 10px; margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; }
+    .btn { flex: 1; padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
     .btn-edit { background: #e7f3ff; color: #1877f2; }
     .btn-delete { background: #ffebe9; color: #fa3e3e; }
-    #status { text-align: center; padding: 20px; color: #65676b; }
+    /* 編輯視窗樣式 */
+    #editModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:100; justify-content:center; align-items:center; }
+    .modal-content { background:white; padding:20px; border-radius:12px; width:90%; max-width:400px; }
+    input, select { width:100%; padding:10px; margin:8px 0; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; }
   </style>
 </head>
 <body>
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-    <h3 style="margin:0;">📦 商品管理</h3>
-    <button onclick="location.href='liff-admin-add-product.html'" style="background:#42b72a; color:white; border:none; padding:5px 10px; border-radius:4px;">+ 新增商品</button>
+    <h3>📦 商品管理</h3>
+    <button onclick="location.href='liff-admin-add-product.html'" style="background:#42b72a; color:white; border:none; padding:8px 15px; border-radius:6px;">+ 新增</button>
   </div>
-  
-  <div id="status">⌛ 正在讀取雲端資料...</div>
-  <div id="product-list"></div>
+  <div id="product-list">載入中...</div>
+
+  <div id="editModal">
+    <div class="modal-content">
+      <h4 id="editTitle">修正商品</h4>
+      <input type="hidden" id="editCode">
+      <label>商品名稱</label><input type="text" id="editName">
+      <label>單價</label><input type="number" id="editPrice">
+      <label>結單日</label><input type="date" id="editDate">
+      <label>狀態</label>
+      <select id="editActive"><option value="TRUE">上架中</option><option value="FALSE">已下架</option></select>
+      <div style="display:flex; gap:10px; margin-top:15px;">
+        <button class="btn" onclick="closeModal()" style="background:#eee;">取消</button>
+        <button class="btn" onclick="saveEdit()" style="background:#00c300; color:white;">儲存修正</button>
+      </div>
+    </div>
+  </div>
 
 <script>
+let allProducts = [];
 async function init() {
-  const status = document.getElementById("status");
-  const list = document.getElementById("product-list");
-
-  try {
-    // 初始化 admin-product LIFF
-    await liff.init({ liffId: "2008857998-AoqmEajq" });
-
-    const res = await fetch("/api/products");
-    const products = await res.json();
-
-    if (products.length === 0) {
-      status.innerText = "目前試算表中無商品資料。";
-      return;
-    }
-
-    status.style.display = "none";
-    list.innerHTML = products.map(p => `
-      <div class="product-card">
-        <div class="product-header">
-          <div class="product-title">${p.productName}</div>
-          <div>
-            <span class="tag" style="background:${p.active==='TRUE'?'#42b72a':'#8e8e8e'}">${p.active==='TRUE'?'上架中':'已下架'}</span>
-          </div>
-        </div>
-        <div class="product-info">
-          代碼：${p.productCode} <br>
-          單價：$${p.price} <br>
-          類型：${p.type === 'overstock' ? '現貨' : '預購'} <br>
-          結單日：${p.closeDate || '未設定'}
-        </div>
-        <div class="actions">
-          <button class="btn btn-edit" onclick="editProduct('${p.productCode}')">修正</button>
-          <button class="btn btn-delete" onclick="deleteProduct('${p.productCode}')">刪除</button>
-        </div>
-      </div>
-    `).join("");
-
-  } catch (err) {
-    status.innerText = "❌ 無法載入： " + err.message;
-  }
+  await liff.init({ liffId: "2008857998-AoqmEajq" });
+  loadProducts();
 }
 
-function editProduct(code) {
-  // 導向編輯頁面 (未來擴充)
-  alert("修正功能：將開啟商品代碼 " + code + " 的編輯視窗");
+async function loadProducts() {
+  const res = await fetch("/api/products");
+  allProducts = await res.json();
+  document.getElementById("product-list").innerHTML = allProducts.map(p => `
+    <div class="product-card">
+      <strong>${p.productName}</strong> (${p.productCode})<br>
+      價格: $${p.price} | 結單: ${p.closeDate}<br>
+      狀態: ${p.active === 'TRUE' ? '✅上架' : '❌下架'}
+      <div class="actions">
+        <button class="btn btn-edit" onclick="openEdit('${p.productCode}')">修正</button>
+        <button class="btn btn-delete" onclick="deleteProduct('${p.productCode}')">刪除</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function openEdit(code) {
+  const p = allProducts.find(x => x.productCode === code);
+  document.getElementById("editCode").value = p.productCode;
+  document.getElementById("editName").value = p.productName;
+  document.getElementById("editPrice").value = p.price;
+  document.getElementById("editDate").value = p.closeDate;
+  document.getElementById("editActive").value = p.active;
+  document.getElementById("editModal").style.display = "flex";
+}
+
+function closeModal() { document.getElementById("editModal").style.display = "none"; }
+
+async function saveEdit() {
+  const code = document.getElementById("editCode").value;
+  const data = {
+    productName: document.getElementById("editName").value,
+    price: document.getElementById("editPrice").value,
+    closeDate: document.getElementById("editDate").value,
+    active: document.getElementById("editActive").value
+  };
+  const res = await fetch("/api/products/" + code, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+  if (res.ok) { alert("修正成功！"); closeModal(); loadProducts(); }
 }
 
 async function deleteProduct(code) {
-  if (!confirm("確定要刪除商品 " + code + " 嗎？此動作將從 Google Sheet 移除。")) return;
-
-  try {
-    const res = await fetch("/api/products/" + code, { method: "DELETE" });
-    const result = await res.json();
-    if (result.ok) {
-      alert("商品已刪除");
-      location.reload();
-    }
-  } catch (err) {
-    alert("刪除失敗：" + err.message);
-  }
+  if (!confirm("確定刪除 " + code + "?")) return;
+  await fetch("/api/products/" + code, { method: "DELETE" });
+  loadProducts();
 }
-
 window.onload = init;
 </script>
 </body>
