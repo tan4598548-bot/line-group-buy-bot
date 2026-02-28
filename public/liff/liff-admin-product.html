@@ -7,11 +7,13 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body { font-family: sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
+    .nav-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
     .product-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .actions { display: flex; gap: 8px; margin-top: 10px; }
     .btn { flex: 1; padding: 10px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
     .btn-edit { background: #007bff; color: white; }
     .btn-delete { background: #dc3545; color: white; }
+    .btn-back { background: #6c757d; color: white; padding: 8px 12px; border-radius: 4px; text-decoration: none; font-size: 14px; }
     #editModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; justify-content:center; align-items:center; }
     .modal-content { background:white; padding:20px; border-radius:8px; width:90%; max-height:80vh; overflow-y:auto; }
     label { font-weight: bold; display: block; margin-top: 10px; font-size: 14px; }
@@ -19,11 +21,13 @@
   </style>
 </head>
 <body>
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-    <h3>📦 商品管理</h3>
-    <button onclick="location.href='liff-admin-add-product.html'" style="background:#28a745; color:white; border:none; padding:8px 15px; border-radius:4px;">+ 新增商品</button>
+  <div class="nav-bar">
+    <a href="liff-admin-dashboard.html" class="btn-back">⬅ 返回中心</a>
+    <h3 style="margin:0;">📦 商品管理</h3>
+    <button onclick="location.href='liff-admin-add-product.html'" style="background:#28a745; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">+ 新增</button>
   </div>
-  <div id="product-list">載入中...</div>
+  
+  <div id="product-list">載入商品中...</div>
 
   <div id="editModal">
     <div class="modal-content">
@@ -35,7 +39,7 @@
       <label>YouTube 連結</label><input type="text" id="editYoutube">
       <label>影音檔連結</label><input type="text" id="editVideo">
       <div style="display:flex; gap:10px; margin-top:20px;">
-        <button class="btn" onclick="closeModal()" style="background:#6c757d; color:white;">取消</button>
+        <button class="btn" onclick="closeModal()" style="background:#eee; color:#333;">取消</button>
         <button class="btn" onclick="saveEdit()" style="background:#00c300; color:white;">儲存更新</button>
       </div>
     </div>
@@ -44,18 +48,24 @@
 <script>
 let products = [];
 async function init() {
-  await liff.init({ liffId: "2008857998-AoqmEajq" });
-  fetchData();
+  try {
+    await liff.init({ liffId: "2008857998-AoqmEajq" }); // admin-product ID
+    fetchData();
+  } catch (err) { console.error("LIFF Init failed", err); }
 }
 
 async function fetchData() {
   const res = await fetch("/api/products");
   products = await res.json();
   const list = document.getElementById("product-list");
+  if (products.length === 0) {
+    list.innerHTML = "目前暫無商品";
+    return;
+  }
   list.innerHTML = products.map(p => `
     <div class="product-card">
       <strong>${p.productName}</strong><br>
-      <small>代碼: ${p.productCode} | 價格: $${p.price}</small>
+      <small>代碼: ${p.productCode} | 價格: ${p.price}</small>
       <div class="actions">
         <button class="btn btn-edit" onclick="openEdit('${p.productCode}')">修正</button>
         <button class="btn btn-delete" onclick="deleteItem('${p.productCode}')">刪除</button>
@@ -86,18 +96,20 @@ async function saveEdit() {
     youtube: document.getElementById("editYoutube").value,
     video: document.getElementById("editVideo").value
   };
-  await fetch("/api/products/" + code, {
+  const res = await fetch("/api/products/" + code, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  alert("更新成功");
-  closeModal();
-  fetchData();
+  if (res.ok) {
+    alert("商品資訊已更新");
+    closeModal();
+    fetchData();
+  }
 }
 
 async function deleteItem(code) {
-  if (confirm("確定刪除？")) {
+  if (confirm("確定要刪除這項商品嗎？此動作無法復原。")) {
     await fetch("/api/products/" + code, { method: "DELETE" });
     fetchData();
   }
