@@ -31,19 +31,20 @@ async function init() {
   const list = document.getElementById("list");
   
   try {
-    // 初始化 LIFF (買家入口)
+    // 初始化買家入口 LIFF ID
     await liff.init({ liffId: "2008857998-jbKsKkPY" });
 
+    // 呼叫商品清單 API
     const res = await fetch("/api/products");
-    if (!res.ok) throw new Error("無法取得商品資料");
+    if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
     
     const data = await res.json();
     
-    // 關鍵修正：對應 Google Sheet 內的 'TRUE' 字串內容
+    // 關鍵修正：必須精確對應試算表 E 欄的 'TRUE' 字串
     const activeProducts = data.filter(p => p.active === 'TRUE');
 
     if (activeProducts.length === 0) {
-      status.innerText = "📭 目前暫時沒有開團中的商品。";
+      status.innerText = "📭 目前暫無開團中的商品。";
       return;
     }
 
@@ -65,7 +66,7 @@ async function init() {
     `).join("");
 
   } catch (err) {
-    console.error(err);
+    console.error("載入出錯:", err);
     status.innerText = "❌ 載入失敗: " + err.message;
   }
 }
