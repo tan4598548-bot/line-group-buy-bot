@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8"><title>新增商品</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f8f9fa; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+    .btn-submit { background: #42b72a; color: white; border: none; width: 100%; padding: 12px; border-radius: 5px; font-size: 16px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h3>➕ 上架新商品</h3>
+  <form id="productForm">
+    <div class="form-group"><label>商品代碼 (例: A001)</label><input type="text" id="productCode" required></div>
+    <div class="form-group"><label>商品名稱</label><input type="text" id="productName" required></div>
+    <div class="form-group"><label>單價</label><input type="number" id="price" required></div>
+    <div class="form-group"><label>類型</label>
+      <select id="type"><option value="normal">預購</option><option value="overstock">現貨</option></select>
+    </div>
+    <div class="form-group"><label>顏色對照 (例: C1:黑色,C2:白色)</label><input type="text" id="colorMap"></div>
+    <div class="form-group"><label>結單日 (YYYY-MM-DD)</label><input type="date" id="closeDate"></div>
+    <button type="submit" class="btn-submit">確認上架</button>
+  </form>
+
+  <script>
+    async function init() {
+      await liff.init({ liffId: "2008857998-ZNTmhd33" }); // 使用 admin-product 同一個 ID 或專屬 ID
+    }
+    document.getElementById("productForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const data = {
+        productCode: document.getElementById("productCode").value,
+        productName: document.getElementById("productName").value,
+        price: document.getElementById("price").value,
+        type: document.getElementById("type").value,
+        colorMap: document.getElementById("colorMap").value,
+        closeDate: document.getElementById("closeDate").value,
+      };
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) { alert("商品上架成功！"); location.href = "liff-admin-product.html"; }
+    };
+    init();
+  </script>
+</body>
+</html>
