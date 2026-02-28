@@ -40,9 +40,7 @@ export async function generateShippingPdf(orders) {
   });
 
   doc.end();
-  return new Promise((resolve) => {
-    stream.on('finish', () => resolve(`/pdf/${filename}`));
-  });
+  return new Promise((resolve) => stream.on('finish', () => resolve(`/pdf/${filename}`)));
 }
 
 export async function generateVendorPdf(orderList) {
@@ -66,9 +64,7 @@ export async function generateVendorPdf(orderList) {
   });
 
   doc.end();
-  return new Promise((resolve) => {
-    stream.on('finish', () => resolve(`/pdf/${filename}`));
-  });
+  return new Promise((resolve) => stream.on('finish', () => resolve(`/pdf/${filename}`)));
 }
 
 export default { generateShippingPdf, generateVendorPdf };

@@ -36,7 +36,7 @@ export async function writeCell(sheet, cell, value) {
 export async function replaceVendorOrders(list) {
   const values = [
     ["overstock_id", "product_name", "color", "size", "price", "qty", "status", "created_at"],
-    ...list.map(i => [i.id || `VO${Date.now()}`, i.productName, i.color, i.size || "", "", i.qty, "ordered", new Date().toISOString()])
+    ...list.map(i => [i.productCode || `VO${Date.now()}`, i.productName, i.color, i.size || "", "", i.qty, "ordered", new Date().toISOString()])
   ];
   await sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range: "VendorOrders!A:H" });
   await sheets.spreadsheets.values.update({

@@ -2,7 +2,7 @@ import * as sheet from "./sheetService.js";
 
 export async function handleOrder(req, res) {
   try {
-    const { productCode, qty, lineUserId, buyerName, type, color, size } = req.body;
+    const { productCode, qty, lineUserId, buyerName, color, size } = req.body;
     const products = await sheet.getProducts();
     const p = products.find(x => x.productCode === productCode);
 
@@ -31,7 +31,7 @@ export async function getBuyerOrders(userId) {
   return orders.filter(o => o.lineUserId === userId);
 }
 
-// 補齊：供管理端 2. 訂單查詢 使用
+// 管理端專用：獲取所有訂單
 export async function getAllOrders() {
   return await sheet.getOrders();
 }

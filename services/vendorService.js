@@ -22,6 +22,7 @@ async function buildVendorOrders() {
   return Object.values(map);
 }
 
+// 供 index.js 呼叫
 export async function getVendorSummary() {
   return await buildVendorOrders();
 }
