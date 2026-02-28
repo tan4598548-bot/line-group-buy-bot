@@ -1,67 +1,58 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8"><title>新增團購商品</title>
+  <meta charset="UTF-8"><title>商品上架</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 15px; background: #f8f9fa; }
-    .card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    .form-group { margin-bottom: 15px; }
-    label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; font-size: 14px; }
-    input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
-    textarea { resize: vertical; }
-    .btn-submit { width: 100%; padding: 15px; background: #06c755; color: white; border: none; font-weight: bold; border-radius: 8px; font-size: 16px; margin-top: 10px; }
+    body { font-family: sans-serif; padding: 15px; background: #fff; }
+    .nav { margin-bottom: 15px; display: flex; justify-content: space-between; }
+    .btn-back { color: #007bff; text-decoration: none; font-weight: bold; }
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 13px; color: #555; }
+    input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 15px; }
+    .btn-submit { width: 100%; padding: 15px; background: #06c755; color: white; border: none; font-weight: bold; border-radius: 8px; margin-top: 15px; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h3>➕ 新增商品 (8項流程)</h3>
-    <div class="form-group"><label>1. 商品名稱</label><input id="nameInput" placeholder="請輸入商品全名"></div>
-    <div class="form-group"><label>2. 價格 (單價)</label><input id="priceInput" type="number" placeholder="數字"></div>
-    <div class="form-group"><label>3. 結單日</label><input id="dateInput" type="date"></div>
-    <div class="form-group"><label>4. 顏色/規格 (用逗號隔開)</label><input id="colorInput" placeholder="紅,藍,黑"></div>
-    <div class="form-group"><label>5. 詳細商品介紹</label><textarea id="descInput" rows="5" placeholder="請輸入商品詳細介紹內容..."></textarea></div>
-    <div class="form-group"><label>6. 圖片網址 (請填入 http 連結)</label><input id="imagesInput" placeholder="http://..."></div>
-    <div class="form-group"><label>7. YouTube 連結 (選填)</label><input id="ytInput" placeholder="https://youtube.com/..."></div>
-    <div class="form-group"><label>8. 影音網址 (選填)</label><input id="videoInput" placeholder="直接影音檔連結"></div>
-    
-    <hr>
-    <div class="form-group"><label>上架類型</label><select id="typeSelect"><option value="normal">預購 (Normal)</option><option value="overstock">現貨 (Overstock)</option></select></div>
-    <button class="btn-submit" onclick="submitProduct()">💾 確定上架商品</button>
-  </div>
+  <div class="nav"><a href="liff-admin-dashboard.html" class="btn-back">❮ 返回主選單</a></div>
+  <h3>➕ 新增/編輯商品</h3>
+  <div class="form-group"><label>1. 商品名稱</label><input id="nameInput" placeholder="請輸入標題"></div>
+  <div class="form-group"><label>2. 賣價 (單價)</label><input id="priceInput" type="number"></div>
+  <div class="form-group"><label>※ 廠商成本 (計算利潤)</label><input id="costInput" type="number"></div>
+  <div class="form-group"><label>3. 結單日期</label><input id="dateInput" type="date"></div>
+  <div class="form-group"><label>4. 規格 (例: 紅,藍,XL)</label><input id="colorInput"></div>
+  <div class="form-group"><label>5. 詳細介紹 (可直接貼文字)</label><textarea id="descInput" rows="5"></textarea></div>
+  <div class="form-group"><label>6. 圖片網址</label><input id="imagesInput" placeholder="http://..."></div>
+  <div class="form-group"><label>7. YouTube/影音網址</label><input id="ytInput"></div>
+  <div class="form-group"><label>8. 類型</label><select id="typeSelect"><option value="normal">預購 (Normal)</option><option value="overstock">現貨 (Overstock)</option></select></div>
+  <button class="btn-submit" onclick="submitProduct()">💾 確定發布</button>
 
 <script>
-let adminUserId = "";
+let adminId = "";
 async function init() {
   await liff.init({ liffId: "2008857998-jbKsKkPY" });
   if (!liff.isLoggedIn()) { liff.login(); return; }
-  const p = await liff.getProfile(); adminUserId = p.userId;
+  adminId = (await liff.getProfile()).userId;
 }
 async function submitProduct() {
-  const btn = document.querySelector('.btn-submit');
-  btn.disabled = true; btn.innerText = "處理中...";
   const body = {
     productName: document.getElementById('nameInput').value,
     price: Number(document.getElementById('priceInput').value),
+    cost: Number(document.getElementById('costInput').value),
     closeDate: document.getElementById('dateInput').value,
-    colorMap: document.getElementById('colorInput').value + " | ", 
+    colorMap: document.getElementById('colorInput').value,
     detailText: document.getElementById('descInput').value,
     images: document.getElementById('imagesInput').value,
     youtube: document.getElementById('ytInput').value,
-    video: document.getElementById('videoInput').value,
-    type: document.getElementById('typeSelect').value,
-    totalStock: 0
+    type: document.getElementById('typeSelect').value
   };
-  try {
-    const res = await fetch("/api/admin/products/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-liff-user-id": adminUserId },
-      body: JSON.stringify(body)
-    });
-    if (res.ok) { alert("上架成功！"); window.location.href="liff-admin-dashboard.html"; }
-    else { alert("上架失敗，請檢查權限"); }
-  } finally { btn.disabled = false; btn.innerText = "確定上架商品"; }
+  const res = await fetch("/api/admin/products/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-liff-user-id": adminId },
+    body: JSON.stringify(body)
+  });
+  if (res.ok) { alert("上架成功！"); location.href="liff-admin-dashboard.html"; }
 }
 init();
 </script>

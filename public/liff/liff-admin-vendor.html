@@ -1,105 +1,49 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <title>現貨出清訂單管理</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
+  <meta charset="UTF-8"><title>廠商管理</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-
   <style>
-    body {
-      font-family: system-ui;
-      background: #f2f2f2;
-      padding: 16px;
-    }
-    h2 {
-      text-align: center;
-      margin-bottom: 12px;
-    }
-    .card {
-      background: #fff;
-      padding: 12px;
-      border-radius: 12px;
-      margin-bottom: 12px;
-    }
-    .row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 6px;
-    }
-    button {
-      width: 100%;
-      padding: 12px;
-      border-radius: 8px;
-      border: none;
-      font-size: 16px;
-      background: #06c755;
-      color: #fff;
-      margin-top: 12px;
-    }
-    button.secondary {
-      background: #555;
-    }
+    body { font-family: sans-serif; padding: 15px; background: #f0f2f5; }
+    .nav { margin-bottom: 15px; }
+    .vendor-card { background: white; border-radius: 10px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .vendor-name { font-weight: bold; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+    .cost-info { color: #e44d26; font-size: 13px; margin-top: 5px; }
+    .note-box { font-size: 12px; color: #666; background: #fdf6ec; padding: 5px; border-radius: 4px; margin-top: 8px; }
+    .btn-action { background: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px; }
   </style>
 </head>
-
 <body>
-  <h2>📦 現貨出清訂單</h2>
-
-  <div id="list"></div>
-
-  <button onclick="printPdf()">🖨️ 列印出貨 PDF</button>
+  <div class="nav"><a href="liff-admin-dashboard.html" style="text-decoration:none;">❮ 返回主選單</a></div>
+  <h3>🏢 廠商訂貨彙整 (Summary)</h3>
+  <div id="vendorList">載入資料中...</div>
 
 <script>
-const ADMIN_LIFF_ID = "2008857998-481MeChx";
-
 async function init() {
-  await liff.init({ liffId: ADMIN_LIFF_ID });
-  if (!liff.isLoggedIn()) liff.login();
-  loadOrders();
+  await liff.init({ liffId: "2008857998-jbKsKkPY" });
+  loadVendorSummary();
 }
+async function loadVendorSummary() {
+  // 對接 Summary 工作表資料
+  const res = await fetch("/api/admin/vendor-orders", { headers: { "x-liff-user-id": (await liff.getProfile()).userId } });
+  const items = await res.json();
+  const container = document.getElementById("vendorList");
+  
+  if(items.length === 0) { container.innerHTML = "尚無採購記錄"; return; }
 
-async function loadOrders() {
-  const res = await fetch("/api/admin/overstock/orders", {
-    headers: {
-      "X-Line-Admin": liff.getIDToken()
-    }
-  });
-  const data = await res.json();
-
-  const el = document.getElementById("list");
-  el.innerHTML = "";
-
-  data.forEach(o => {
-    const div = document.createElement("div");
-    div.className = "card";
-    div.innerHTML = `
-      <div class="row"><b>買家</b><span>${o.buyerName}</span></div>
-      <div class="row"><b>商品</b><span>${o.productName}</span></div>
-      <div class="row"><b>規格</b><span>${o.color} / ${o.size}</span></div>
-      <div class="row"><b>價格</b><span>$${o.price}</span></div>
-      <div class="row"><b>狀態</b><span>${o.status}</span></div>
-    `;
-    el.appendChild(div);
-  });
+  container.innerHTML = items.map(i => `
+    <div class="vendor-card">
+      <div class="vendor-name">
+        <span>${i.product_name}</span>
+        <button class="btn-action" onclick="alert('導出廠商訂單PDF')">導出單據</button>
+      </div>
+      <div style="font-size:14px;">規格: ${i.color} / 數量: <strong>${i.total_ordered}</strong></div>
+      <div class="cost-info">預估總成本: $${i.subtotal_cost || (i.total_ordered * i.cost)}</div>
+      <div class="note-box">廠商備註: ${i.vendor_note || '無'}</div>
+    </div>
+  `).join("");
 }
-
-async function printPdf() {
-  const res = await fetch("/api/admin/overstock/shipping-pdf", {
-    headers: {
-      "X-Line-Admin": liff.getIDToken()
-    }
-  });
-
-  const data = await res.json();
-  if (!data.pdfUrl) {
-    alert("目前沒有可列印的出貨資料");
-    return;
-  }
-  window.open(data.pdfUrl, "_blank");
-}
-
 init();
 </script>
 </body>

@@ -1,57 +1,46 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8"><title>商品訂購列表</title>
+  <meta charset="UTF-8"><title>商品清單</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: -apple-system, sans-serif; background: #f0f2f5; margin: 0; padding: 15px; }
-    .header { margin-bottom: 20px; text-align: center; }
-    .list-container { display: flex; flex-direction: column; gap: 10px; }
-    .product-row { 
+    body { font-family: sans-serif; background: #f8f9fa; padding: 15px; margin: 0; }
+    .item-row { 
       background: white; border-radius: 12px; padding: 12px; display: flex; 
-      align-items: center; text-decoration: none; color: inherit; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      align-items: center; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      text-decoration: none; color: inherit;
     }
-    .p-img { width: 65px; height: 65px; border-radius: 8px; object-fit: cover; margin-right: 12px; background: #eee; }
-    .p-info { flex: 1; }
-    .p-name { font-weight: bold; font-size: 15px; margin-bottom: 4px; color: #333; line-height: 1.4; }
-    .p-price { color: #e44d26; font-weight: bold; font-size: 14px; }
-    .p-tag { font-size: 10px; background: #06c755; color: white; padding: 2px 6px; border-radius: 4px; margin-right: 5px; }
-    .arrow { color: #ccc; font-size: 18px; margin-left: 10px; }
+    .item-img { width: 70px; height: 70px; border-radius: 8px; object-fit: cover; margin-right: 12px; }
+    .item-info { flex: 1; }
+    .item-name { font-weight: bold; font-size: 15px; color: #333; }
+    .item-price { color: #e44d26; font-weight: bold; margin-top: 5px; }
+    .tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; color: white; margin-right: 5px; }
   </style>
 </head>
 <body>
-  <div class="header"><h3>🛒 當前團購清單</h3></div>
-  <div id="productList" class="list-container">載入中...</div>
+  <h3>🛒 現正開團中</h3>
+  <div id="list">載入中...</div>
 
 <script>
 async function init() {
   await liff.init({ liffId: "2008857998-jbKsKkPY" });
-  loadProducts();
-}
-async function loadProducts() {
-  try {
-    const res = await fetch("/api/products");
-    const products = await res.json();
-    const active = products.filter(p => p.active === true || p.active === 'TRUE');
-    const container = document.getElementById("productList");
-
-    if(active.length === 0) { container.innerHTML = "目前暫無開團商品"; return; }
-
-    container.innerHTML = active.map(p => {
-      const img = p.images ? p.images.split(',')[0] : '';
-      return `
-        <a href="liff-order.html?code=${p.productCode}" class="product-row">
-          <img src="${img || 'https://via.placeholder.com/65'}" class="p-img">
-          <div class="p-info">
-            <div class="p-name">${p.type === 'overstock' ? '<span class="p-tag" style="background:#ff9500">現貨</span>' : '<span class="p-tag">預購</span>'}${p.productName}</div>
-            <div class="p-price">$${p.price}</div>
-          </div>
-          <div class="arrow">❯</div>
-        </a>
-      `;
-    }).join("");
-  } catch(e) { document.getElementById("productList").innerHTML = "資料讀取錯誤"; }
+  const res = await fetch("/api/products");
+  const data = await res.json();
+  const active = data.filter(p => p.active);
+  document.getElementById("list").innerHTML = active.map(p => `
+    <a href="liff-order.html?code=${p.productCode}" class="item-row">
+      <img src="${p.images ? p.images.split(',')[0] : 'https://via.placeholder.com/70'}" class="item-img">
+      <div class="item-info">
+        <div class="item-name">
+          <span class="tag" style="background:${p.type==='overstock'?'#ff9500':'#007bff'}">${p.type==='overstock'?'現貨':'預購'}</span>
+          ${p.productName}
+        </div>
+        <div class="item-price">$${p.price}</div>
+      </div>
+      <div style="color:#ccc">❯</div>
+    </a>
+  `).join("");
 }
 init();
 </script>
