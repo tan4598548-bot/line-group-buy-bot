@@ -1,93 +1,73 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8"><title>到貨/點貨管理</title>
+  <meta charset="UTF-8"><title>到貨點貨管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; background: #f8f9fa; padding: 15px; margin: 0; }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: white; padding: 10px; border-radius: 8px; }
-    .order-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .order-info { flex-grow: 1; }
-    input[type="checkbox"] { width: 28px; height: 28px; margin-right: 15px; cursor: pointer; }
-    .btn-clear { background: #ff4d4f; color: white; border: none; width: 100%; padding: 16px; border-radius: 8px; font-size: 18px; font-weight: bold; margin-top: 20px; cursor: pointer; }
-    .btn-back { background: #666; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+    body { font-family: sans-serif; background: #f8f9fa; padding: 15px; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .order-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .status-select { width: 100%; padding: 10px; margin-top: 10px; border-radius: 4px; border: 1px solid #ddd; font-size: 16px; }
+    .btn-clear { background: #ff4d4f; color: white; border: none; width: 100%; padding: 15px; border-radius: 8px; font-weight: bold; margin-top: 20px; }
+    .status-已到貨 { border-left: 5px solid #28a745; }
+    .status-部分到貨 { border-left: 5px solid #ffc107; }
   </style>
 </head>
 <body>
   <div class="header">
-    <button class="btn-back" onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button>
-    <h3 style="margin:0;">🚚 到貨點貨</h3>
+    <button onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button>
+    <h3>🚚 到貨點貨 (可編輯)</h3>
   </div>
 
   <div id="list">載入中...</div>
-  
-  <button class="btn-clear" onclick="clearArrived()">🧹 一鍵清除已到貨商品</button>
+  <button class="btn-clear" onclick="clearFullArrived()">🧹 清除「已到貨(齊全)」商品</button>
 
-  <script>
+<script>
     let orders = [];
     async function init() {
-      await liff.init({ liffId: "2008857998-ePcCkr6K" }); // admin-arrival
+      await liff.init({ liffId: "2008857998-ePcCkr6K" });
       loadOrders();
     }
 
     async function loadOrders() {
+      const res = await fetch("/api/admin/orders");
+      orders = await res.json();
       const listDiv = document.getElementById("list");
-      try {
-        const res = await fetch("/api/admin/orders");
-        orders = await res.json();
-        
-        // 過濾並顯示
-        listDiv.innerHTML = orders.map(o => `
-          <div class="order-item">
-            <input type="checkbox" ${o.status === '已到貨' ? 'checked' : ''} 
-                   onchange="toggleArrival('${o.orderId}', this.checked)">
-            <div class="order-info">
-              <strong>${o.productName}</strong><br>
-              <small>買家: ${o.buyerName} | 數量: ${o.qty}</small><br>
-              <span id="stat-${o.orderId}" style="color:${o.status === '已到貨' ? 'green' : 'orange'}">${o.status}</span>
-            </div>
+      
+      listDiv.innerHTML = orders.map(o => `
+        <div class="order-item status-${o.status}">
+          <div style="display:flex; justify-content:space-between;">
+            <strong>${o.buyerName}</strong>
+            <span>${o.qty} 件</span>
           </div>
-        `).join("") || "目前無訂單資料";
-      } catch (e) { listDiv.innerHTML = "載入失敗"; }
+          <div style="font-size: 14px; color: #666; margin-top:5px;">${o.productName}</div>
+          
+          <select class="status-select" onchange="updateStatus('${o.orderId}', this.value)">
+            <option value="待點貨" ${o.status==='待點貨'?'selected':''}>⏳ 待點貨</option>
+            <option value="部分到貨" ${o.status==='部分到貨'?'selected':''}>⚠️ 部分到貨</option>
+            <option value="已到貨" ${o.status==='已到貨'?'selected':''}>✅ 已到貨(齊全)</option>
+          </select>
+        </div>
+      `).join("") || "目前無訂單";
     }
 
-    async function toggleArrival(orderId, isChecked) {
-      const status = isChecked ? '已到貨' : '待點貨';
-      const label = document.getElementById(`stat-${orderId}`);
-      label.innerText = "更新中...";
-      
-      const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+    async function updateStatus(orderId, newStatus) {
+      await fetch(`/api/admin/orders/${orderId}/status`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: status })
+        body: JSON.stringify({ status: newStatus })
       });
-
-      if (res.ok) {
-        label.innerText = status;
-        label.style.color = isChecked ? 'green' : 'orange';
-      }
+      loadOrders(); // 刷新樣式
     }
 
-    async function clearArrived() {
-      if (!confirm("確定要從試算表中永久刪除所有標記為『已到貨』的列嗎？")) return;
-      
-      const btn = document.querySelector(".btn-clear");
-      btn.innerText = "正在清除試算表資料...";
-      btn.disabled = true;
-
-      const res = await fetch("/api/admin/orders/clear-arrived", { method: "POST" });
-      
-      if (res.ok) {
-        alert("✅ 已成功清除試算表中的已到貨資料！");
-        loadOrders(); // 重新整理列表
-      } else {
-        alert("❌ 清除失敗，請檢查網路連接");
-      }
-      btn.innerText = "🧹 一鍵清除已到貨商品";
-      btn.disabled = false;
+    async function clearFullArrived() {
+      if (!confirm("確定清除所有『已到貨』的列？（部分到貨會保留）")) return;
+      await fetch("/api/admin/orders/clear-arrived", { method: "POST" });
+      alert("清理完成");
+      loadOrders();
     }
     window.onload = init;
-  </script>
+</script>
 </body>
 </html>
