@@ -6,20 +6,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: -apple-system, "Microsoft JhengHei", sans-serif; background: #f8f9fa; padding: 20px; margin: 0; color: #333; }
-    h2 { display: flex; align-items: center; font-size: 24px; margin-bottom: 20px; }
+    body { font-family: -apple-system, sans-serif; background: #fff; padding: 20px; margin: 0; }
+    h2 { display: flex; align-items: center; font-size: 24px; margin-bottom: 20px; color: #333; }
     .box-icon { width: 30px; margin-right: 10px; }
-    .form-group { margin-bottom: 15px; }
+    .form-group { margin-bottom: 12px; }
     input, select { 
-      width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; 
-      box-sizing: border-box; font-size: 16px; background: #fff;
+      width: 100%; padding: 14px; border: 1px solid #e0e0e0; border-radius: 4px; 
+      box-sizing: border-box; font-size: 18px; color: #333;
     }
+    input::placeholder { color: #aaa; }
     .btn-submit { 
       background: #00c300; color: white; border: none; width: 100%; 
-      padding: 15px; border-radius: 6px; font-size: 18px; font-weight: bold; 
+      padding: 15px; border-radius: 4px; font-size: 18px; font-weight: bold; 
       margin-top: 10px; cursor: pointer;
     }
-    .btn-submit:disabled { background: #ccc; }
   </style>
 </head>
 <body>
@@ -53,7 +53,13 @@
       <input type="text" id="images" placeholder="圖片連結 (網址)">
     </div>
     <div class="form-group">
-      <input type="date" id="closeDate" title="結單日">
+      <input type="text" id="youtube" placeholder="YouTube 連結 (網址)">
+    </div>
+    <div class="form-group">
+      <input type="text" id="video" placeholder="影音檔連結 (網址)">
+    </div>
+    <div class="form-group">
+      <input type="date" id="closeDate" title="結單日設定">
     </div>
 
     <button type="submit" class="btn-submit" id="submitBtn">確認上架</button>
@@ -61,45 +67,45 @@
 
   <script>
     async function init() {
-      try {
-        await liff.init({ liffId: "2008857998-AoqmEajq" }); 
-      } catch (err) { console.error("LIFF Init Error", err); }
+      await liff.init({ liffId: "2008857998-AoqmEajq" }); // admin-product
     }
 
     document.getElementById("productForm").onsubmit = async (e) => {
       e.preventDefault();
       const btn = document.getElementById("submitBtn");
       btn.disabled = true;
-      btn.innerText = "正在同步至試算表...";
+      btn.innerText = "上傳中...";
 
-      // 自動產生簡易代碼或讓後端處理
       const productCode = "P" + Date.now().toString().slice(-6);
-
       const payload = {
         productCode: productCode,
         productName: document.getElementById("productName").value,
         price: document.getElementById("price").value,
-        cost: document.getElementById("cost").value, // 成本
-        colorMap: document.getElementById("colorMap").value, // 顏色
-        sizeMap: document.getElementById("sizeMap").value,   // 尺寸
+        cost: document.getElementById("cost").value,
+        colorMap: document.getElementById("colorMap").value,
+        sizeMap: document.getElementById("sizeMap").value,
         type: document.getElementById("type").value,
         total_stock: document.getElementById("total_stock").value,
         images: document.getElementById("images").value,
+        youtube: document.getElementById("youtube").value,
+        video: document.getElementById("video").value,
         closeDate: document.getElementById("closeDate").value
       };
 
-      try {
-        const res = await fetch("/api/products", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-          alert("✅ 商品已成功完整上架！");
-          location.href = "liff-admin-product.html";
-        } else { alert("❌ 上架失敗"); }
-      } catch (err) { alert("錯誤: " + err.message); }
-      finally { btn.disabled = false; btn.innerText = "確認上架"; }
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        alert("✅ 商品上架成功！");
+        location.href = "liff-admin-product.html";
+      } else {
+        alert("❌ 上架失敗");
+        btn.disabled = false;
+        btn.innerText = "確認上架";
+      }
     };
     window.onload = init;
   </script>
