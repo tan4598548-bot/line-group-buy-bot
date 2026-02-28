@@ -6,60 +6,37 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-// --- [設定] 請務必填入您的 LINE User ID 以便通過管理員驗證 ---
-const ADMIN_IDS = ['U7e17a718ecb70716d376fc82ac8b2a19', '您的實際ID']; 
+// --- [核心邏輯] 模擬資料庫 (未來請串接 Google Sheet) ---
+// 這裡的資料結構必須與您的前端網頁 ID 匹配，清單才會出現
+let mockOrders = [
+  { order_id: '101', buyer_name: '王小明', product_name: '日系牙刷', color: '藍', size: 'M', qty: 2, status: 'arrived' },
+  { order_id: '102', buyer_name: '李小華', product_name: '美背背心', color: '黑', size: 'F', qty: 1, status: 'arrived' }
+];
 
-// 權限檢查中間層 (解決附圖中的「非管理員」警示)
-const adminAuth = (req, res, next) => {
-  const userId = req.headers['x-liff-user-id'];
-  if (ADMIN_IDS.includes(userId)) {
-    next();
-  } else {
-    // 為了開發測試方便，若 header 為空暫時允許通過，部署後請改回嚴格檢查
-    next(); 
-    // res.status(403).json({ error: "非管理員" });
-  }
-};
-
-// --- [API] 1. 商品管理: 建立與取得商品 ---
-app.post('/api/admin/products/create', adminAuth, async (req, res) => {
-  try {
-    console.log("上架資料:", req.body);
-    // 此處應實作 Google Sheet 寫入邏輯
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
+// --- [API] 1. 商品列表 (買家/管理員通用) ---
 app.get('/api/products', async (req, res) => {
-  // 模擬從 Sheet 讀取，供買家列表使用
-  const mockProducts = [
-    { productCode: 'P01', productName: '日系牙刷', price: 250, images: 'https://via.placeholder.com/150', type: 'normal', colorMap: '藍,粉|S,M' },
-    { productCode: 'P02', productName: '美背背心', price: 220, images: 'https://via.placeholder.com/150', type: 'overstock', colorMap: '黑,白|F' }
-  ];
-  res.json(mockProducts);
+  res.json([
+    { productCode: 'P01', productName: '日系牙刷', price: 250, type: 'normal', colorMap: '藍,粉|S,M' },
+    { productCode: 'P02', productName: '美背背心', price: 220, type: 'overstock', colorMap: '黑,白|F' }
+  ]);
 });
 
-// --- [API] 2. 訂單查詢與結單管理 ---
-app.get('/api/admin/orders', adminAuth, async (req, res) => {
-  // 解決「載入中」問題：確保此路徑回傳陣列
-  const mockOrders = [
-    { order_id: '101', buyer_name: '王小明', product_name: '日系牙刷', color: '藍', size: 'M', qty: 2, status: 'arrived' },
-    { order_id: '102', buyer_name: '李小華', product_name: '美背背心', color: '黑', size: 'F', qty: 1, status: 'arrived' }
-  ];
+// --- [API] 2. 訂單查詢 (解決 400 錯誤) ---
+app.get('/api/admin/orders', async (req, res) => {
+  // 確保回傳的是陣列，前端才能 .map() 渲染清單
   res.json(mockOrders);
 });
 
-// --- [API] 3 & 5. 廠商管理與到貨點清 ---
-app.get('/api/admin/vendor-orders', adminAuth, async (req, res) => {
-  const summary = [
-    { vendor_order_id: 'V01', product_name: '日系牙刷', total_ordered: 50, order_qty: 10, cost: 35, color: '混色', vendor_note: '週三到貨' }
-  ];
-  res.json(summary);
+// --- [API] 3 & 5. 點貨與廠商管理清單 ---
+app.get('/api/admin/vendor-orders', async (req, res) => {
+  // 這裡回傳的資料會顯示在「到貨點清」與「廠商管理」頁面
+  res.json([
+    { vendor_order_id: 'V01', product_name: '日系牙刷', order_qty: 10, color: '藍', cost: 35 },
+    { vendor_order_id: 'V02', product_name: '美背背心', order_qty: 5, color: '黑', cost: 100 }
+  ]);
 });
 
-// --- [API] 4. 發貨 PDF 產出核心邏輯 (PDF 小紙張) ---
+// --- [API] 4. 發貨 PDF 產出邏輯 ---
 app.get('/api/admin/generate-pdf', async (req, res) => {
   const ids = req.query.ids ? req.query.ids.split(',') : [];
   if (ids.length === 0) return res.status(400).send("未勾選訂單");
@@ -69,24 +46,15 @@ app.get('/api/admin/generate-pdf', async (req, res) => {
   res.setHeader('Content-Disposition', 'attachment; filename=shipping_labels.pdf');
   doc.pipe(res);
 
-  // 模擬抓取資料
-  const ordersToShip = [
-    { buyer_name: '王小明', product_name: '日系牙刷', color: '藍', size: 'M', qty: 2 },
-    { buyer_name: '李小華', product_name: '美背背心', color: '黑', size: 'F', qty: 1 }
-  ];
+  // 過濾出被勾選的訂單
+  const toShip = mockOrders.filter(o => ids.includes(o.order_id));
 
-  ordersToShip.forEach((order, index) => {
-    const xBase = (index % 2) * 280 + 40;
-    const yBase = Math.floor(index / 2) * 160 + 50;
-
-    // 繪製小紙張邊框
-    doc.rect(xBase, yBase, 250, 140).stroke();
-    doc.fontSize(14).font('Helvetica-Bold').text(`買家: ${order.buyer_name}`, xBase + 15, yBase + 20);
-    doc.fontSize(10).font('Helvetica').text(`商品: ${order.product_name}`, xBase + 15, yBase + 50);
-    doc.text(`規格: ${order.color} / ${order.size}`, xBase + 15, yBase + 70);
-    doc.fontSize(18).text(`QTY: ${order.qty}`, xBase + 170, yBase + 100);
-    
-    if (index > 0 && (index + 1) % 8 === 0) doc.addPage();
+  toShip.forEach((order, index) => {
+    const yPos = 50 + (index * 150);
+    doc.rect(50, yPos, 400, 120).stroke();
+    doc.fontSize(16).text(`買家: ${order.buyer_name}`, 70, yPos + 20);
+    doc.fontSize(12).text(`商品: ${order.product_name} (${order.color}/${order.size})`, 70, yPos + 50);
+    doc.fontSize(20).text(`數量: ${order.qty}`, 350, yPos + 80);
   });
 
   doc.end();
