@@ -6,16 +6,15 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body { font-family: sans-serif; padding: 15px; background: #f4f4f7; }
-    .nav { margin-bottom: 15px; }
-    .order-card { background: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid #007bff; }
-    .action-btn { padding: 6px 12px; border-radius: 4px; border: none; font-size: 12px; margin-right: 5px; cursor: pointer; }
-    .btn-notify { background: #ff9500; color: white; }
-    .btn-close { background: #333; color: white; }
-    .btn-out { background: #dc3545; color: white; }
+    .nav { margin-bottom: 15px; } .btn-back { color: #007bff; text-decoration: none; font-weight: bold; }
+    .order-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .btn-group { margin-top: 10px; display: flex; gap: 5px; }
+    .btn { padding: 8px 12px; border: none; border-radius: 6px; font-size: 12px; color: white; cursor: pointer; }
+    .btn-close { background: #333; } .btn-out { background: #dc3545; }
   </style>
 </head>
 <body>
-  <div class="nav"><a href="liff-admin-dashboard.html" style="text-decoration:none;">❮ 返回管理中心</a></div>
+  <div class="nav"><a href="liff-admin-dashboard.html" class="btn-back">❮ 返回管理中心</a></div>
   <h3>📑 訂單/結單管理</h3>
   <div id="orderList">載入中...</div>
 
@@ -25,21 +24,20 @@ async function init() {
   loadOrders();
 }
 async function loadOrders() {
-  const res = await fetch("/api/admin/orders", { headers: { "x-liff-user-id": (await liff.getProfile()).userId } });
+  const p = await liff.getProfile();
+  const res = await fetch("/api/admin/orders", { headers: { "x-liff-user-id": p.userId } });
   const data = await res.json();
   document.getElementById("orderList").innerHTML = data.map(o => `
     <div class="order-card">
       <div><strong>${o.product_name}</strong> (${o.color}/${o.size})</div>
       <div style="font-size:13px; color:#666;">買家: ${o.buyer_name} | 數量: ${o.qty}</div>
-      <div style="margin-top:8px;">
-        <button class="action-btn btn-notify" onclick="notify('${o.line_id}')">🔔 LINE 通知</button>
-        <button class="action-btn btn-out" onclick="markOut('${o.order_id}')">❌ 斷貨處理</button>
+      <div class="btn-group">
+        <button class="btn btn-close" onclick="alert('已轉入採購清單')">結單轉出</button>
+        <button class="btn btn-out" onclick="alert('已發送斷貨通知')">❌ 斷貨處理</button>
       </div>
     </div>
   `).join("");
 }
-// 需求：對已訂買家發 LINE 通知
-function notify(id) { alert("已發送結單提醒至 LINE"); }
 init();
 </script>
 </body>

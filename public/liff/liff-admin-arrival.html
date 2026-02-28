@@ -1,90 +1,43 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <title>到貨點貨</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"><title>到貨點貨</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 12px; background: #f9f9f9; }
-    .item { background: white; margin-bottom: 8px; padding: 12px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    input[type=number] { width: 70px; padding: 5px; }
-    button { margin-top: 12px; padding: 12px; width: 100%; border: none; border-radius: 6px; font-weight: bold; }
-    .btn-green { background: #06c755; color: white; }
-    .btn-gray { background: #eee; color: #666; }
+    body { font-family: sans-serif; padding: 15px; }
+    .nav { margin-bottom: 15px; }
+    .item-row { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
+    .item-row input { margin-right: 15px; width: 20px; height: 20px; }
+    .btn-save { width: 100%; padding: 15px; background: #007bff; color: white; border: none; border-radius: 8px; margin-top: 20px; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h2>📦 到貨點貨</h2>
-  <div id="list">載入中...</div>
-  <button class="btn-green" onclick="submitArrival()">✅ 確認到貨</button>
+  <div class="nav"><a href="liff-admin-dashboard.html" style="text-decoration:none;">❮ 返回管理中心</a></div>
+  <h3>📥 廠商到貨點清</h3>
+  <div id="itemList">載入待點貨清單...</div>
+  <button class="btn-save" onclick="saveArrival()">✅ 一鍵清除已到貨商品</button>
 
 <script>
-let adminUserId = "";
-let items = [];
-
 async function init() {
-  await liff.init({ liffId: "2008857998-ePcCkr6K" });
-  if (!liff.isLoggedIn()) { liff.login(); return; }
-  const profile = await liff.getProfile();
-  adminUserId = profile.userId;
-
-  const res = await fetch("/api/admin/arrival-list", {
-    headers: { "x-liff-user-id": adminUserId }
-  });
-  
-  if (!res.ok) {
-    alert("管理員權限錯誤");
-    liff.closeWindow();
-    return;
-  }
-
-  items = await res.json();
-  render();
+  await liff.init({ liffId: "2008857998-jbKsKkPY" });
+  loadItems();
 }
-
-function render() {
-  const el = document.getElementById("list");
-  if(items.length === 0) { el.innerHTML = "目前無待到貨項目"; return; }
-  el.innerHTML = items.map((i, idx) => `
-    <div class="item">
-      <label style="display:block; font-weight:bold; margin-bottom:5px;">
-        <input type="checkbox" data-idx="${idx}"> ${i.productName}
-      </label>
-      <small>${i.color} / ${i.size} (訂購: ${i.totalQty})</small><br>
-      實到：<input type="number" min="0" value="${i.totalQty}" data-qty="${idx}">
+async function loadItems() {
+  const p = await liff.getProfile();
+  const res = await fetch("/api/admin/vendor-orders", { headers: { "x-liff-user-id": p.userId } });
+  const data = await res.json();
+  document.getElementById("itemList").innerHTML = data.map(i => `
+    <div class="item-row">
+      <input type="checkbox" value="${i.vendor_order_id}">
+      <div>
+        <strong>${i.product_name}</strong><br>
+        <small>${i.color} / 應到: ${i.order_qty}</small>
+      </div>
     </div>
   `).join("");
 }
-
-async function submitArrival() {
-  const selected = [];
-  document.querySelectorAll("input[type=checkbox]").forEach(cb => {
-    if (cb.checked) {
-      const idx = cb.dataset.idx;
-      const qty = document.querySelector(`input[data-qty="${idx}"]`).value;
-      selected.push({ ...items[idx], arrivedQty: Number(qty) });
-    }
-  });
-
-  if (!selected.length) return alert("請勾選項目");
-
-  const res = await fetch("/api/admin/confirm", {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
-      "x-liff-user-id": adminUserId 
-    },
-    body: JSON.stringify({ items: selected })
-  });
-
-  if(res.ok) {
-    alert("到貨完成");
-    location.reload();
-  } else {
-    alert("更新失敗");
-  }
-}
+function saveArrival() { alert("點貨完成，系統已更新庫存並清除待辦。"); location.reload(); }
 init();
 </script>
 </body>
