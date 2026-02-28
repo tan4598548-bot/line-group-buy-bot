@@ -13,10 +13,10 @@ export const orderService = {
     try {
       console.log(`📊 正在讀取試算表: ${SPREADSHEET_ID}`);
       
-      // 讀取 Orders 分頁的 A 到 K 欄 (對應您圖片中的 11 個欄位)
+      // 讀取 Orders 分頁的 A 到 M 欄 (對應您圖片中的所有欄位)
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: 'Orders!A:K', 
+        range: 'Orders!A:M', 
       });
 
       const rows = response.data.values;
@@ -31,21 +31,21 @@ export const orderService = {
 
       // 根據您的 Google Sheet 截圖修正欄位映射
       return dataRows.map(row => {
-        // 建立一個尋找索引的輔助工具，避免找不到標題報錯
         const getVal = (name) => {
           const index = headers.indexOf(name);
-          return index !== -1 ? row[index] : '';
+          return (index !== -1 && row[index]) ? row[index] : '';
         };
 
         return {
-          orderId: getVal('order_ID'),       // 修正：對齊圖片中的 order_ID
-          productName: getVal('product_name'), // 修正：對齊圖片中的 product_name
-          buyerName: getVal('buyer_name'),     // 修正：對齊圖片中的 buyer_name
+          orderId: getVal('order_ID'),       // 對齊圖片標題: order_ID
+          productName: getVal('product_name'), // 對齊圖片標題: product_name
+          buyerName: getVal('buyer_name'),     // 對齊圖片標題: buyer_name
           qty: getVal('qty') || 0,
           status: getVal('status') || 'ordered',
           color: getVal('color') || '',
           size: getVal('size') || '',
-          createdAt: getVal('created_at')     // 修正：對齊圖片中的 created_at
+          price: getVal('price') || 0,
+          createdAt: getVal('created_at')     // 對齊圖片標題: created_at
         };
       });
 
