@@ -167,3 +167,47 @@ export const sheetService = {
         range: `Orders!K${rowIndex}`,
         valueInputOption: 'USER_ENTERED',
         resource: { values: [[status]] }
+      });
+    } catch (e) {
+      console.error("updateOrderStatus Error:", e);
+      throw e;
+    }
+  },
+
+  // 7. 一鍵清除已到貨商品
+  async clearArrivedOrders() {
+    try {
+      const res = await sheets.spreadsheets.values.get({ 
+        spreadsheetId: SPREADSHEET_ID, 
+        range: 'Orders!A:K' 
+      });
+      const rows = res.data.values;
+      if (!rows || rows.length <= 1) return;
+      
+      const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+      const sId = meta.data.sheets.find(s => s.properties.title === 'Orders').properties.sheetId;
+
+      // 重要：從下往上刪除以避免索引偏移
+      // 只會刪除狀態精確為「已到貨」的資料，「部分到貨」會保留。
+      for (let i = rows.length - 1; i >= 1; i--) {
+        if (rows[i][10] === '已到貨') { // K 欄索引為 10
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: SPREADSHEET_ID,
+            resource: { 
+              requests: [{ 
+                deleteDimension: { 
+                  range: { sheetId: sId, dimension: "ROWS", startIndex: i, endIndex: i + 1 } 
+                } 
+              }] 
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.error("clearArrivedOrders Error:", e);
+      throw e;
+    }
+  }
+};
+
+export default sheetService;
