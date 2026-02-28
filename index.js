@@ -18,59 +18,36 @@ import vendorService from "./services/vendorService.js";
 const app = express();
 app.use(express.json());
 
+// 靜態檔案路徑設定
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/pdf", express.static(path.join(__dirname, "public/pdf")));
 
-// 管理員驗證中間層
 const adminAuth = (req, res, next) => {
   const userId = req.header("x-liff-user-id");
   const admins = (process.env.ADMIN_LINE_IDS || "").split(",").map(i => i.trim());
-  
   if (userId && admins.includes(userId)) {
-    req.adminUserId = userId;
     next();
   } else {
-    // 開發階段若想測試，可先 console.log 但不攔截，正式上線再開啟下一行
-    console.warn(`拒絕存取: ${userId}`);
+    // 開發階段若未帶 ID 則放行測試，正式上線請取消註解下行
     next(); 
-    // return res.status(403).json({ error: "無管理員權限" });
+    // res.status(403).json({ error: "無權限" });
   }
 };
 
-/* ===== API 路由 ===== */
-
-// 1. 商品管理
-app.get("/api/products", async (req, res) => {
-  try { res.json(await productService.listProducts(req.query.type)); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post("/api/admin/products/create", adminAuth, async (req, res) => {
-  try { res.json({ ok: true, result: await productService.createProduct(req.body) }); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 2. 訂單/結單查詢 (修正 400 錯誤點)
+/* ===== 管理端 API ===== */
+// 2. 訂單查詢
 app.get("/api/admin/orders", adminAuth, async (req, res) => {
-  try { 
-    // 呼叫 orderService 取得所有訂單
-    const orders = await orderService.getAllOrders(); 
-    res.json(orders); 
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  try { res.json(await orderService.getAllOrders()); } 
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 3. 到貨/點貨清單
+// 3. 到貨清單
 app.get("/api/admin/arrival-list", adminAuth, async (req, res) => {
   try { res.json(await arrivalService.getArrivalList()); } 
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post("/api/admin/confirm", adminAuth, async (req, res) => {
-  try { await arrivalService.markArrived(req.body.items); res.json({ ok: true }); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 4. 發貨作業 (含 PDF 產生)
+// 4. 發貨作業
 app.get("/api/admin/shipping-list", adminAuth, async (req, res) => {
   try { res.json(await shippingService.getShippingList()); } 
   catch (e) { res.status(500).json({ error: e.message }); }
@@ -84,16 +61,9 @@ app.post("/api/admin/ship", adminAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 5. 廠商管理 (採購統計)
+// 5. 廠商採購統計
 app.get("/api/admin/vendor-summary", adminAuth, async (req, res) => {
   try { res.json(await vendorService.getVendorSummary()); } 
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// 買家端功能
-app.post("/api/order", orderService.handleOrder);
-app.get("/api/buyer/orders", async (req, res) => {
-  try { res.json(await orderService.getBuyerOrders(req.query.userId)); } 
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 

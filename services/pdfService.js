@@ -2,10 +2,15 @@ import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
 
+// 使用 process.cwd() 確保在 Render 環境路徑正確
 const fontPath = path.join(process.cwd(), "public/fonts/msjh.ttc");
+const outputDir = path.join(process.cwd(), "public/pdf");
 
+/**
+ * 📦 產生買家發貨小紙條 (對齊需求：想要的 PDF 小紙張)
+ */
 export async function generateShippingPdf(orders) {
-  const outputDir = "public/pdf";
+  // 自動建立資料夾以防 Render 缺少
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
   const filename = `ship-${Date.now()}.pdf`;
@@ -14,7 +19,13 @@ export async function generateShippingPdf(orders) {
 
   const stream = fs.createWriteStream(outputPath);
   doc.pipe(stream);
-  if (fs.existsSync(fontPath)) doc.font(fontPath);
+
+  // 檢查字體是否存在
+  if (fs.existsSync(fontPath)) {
+    doc.font(fontPath);
+  } else {
+    console.warn("⚠️ 警告：找不到 msjh.ttc 字體，中文可能亂碼");
+  }
 
   doc.fontSize(22).text("📦 團購發貨小紙條", { align: "center" });
   doc.moveDown();
@@ -33,18 +44,23 @@ export async function generateShippingPdf(orders) {
     let subtotal = 0;
     items.forEach(i => {
       doc.fontSize(12).text(`  - ${i.productName} (${i.color}/${i.size}) x ${i.qty}  [$${i.price * i.qty}]`);
-      subtotal += i.price * i.qty;
+      subtotal += (i.price || 0) * (i.qty || 0);
     });
+    
     doc.fontSize(12).text(`小計：$${subtotal}`, { align: "right" });
     doc.moveDown(1);
   });
 
   doc.end();
-  return new Promise((resolve) => stream.on('finish', () => resolve(`/pdf/${filename}`)));
+  return new Promise((resolve) => {
+    stream.on('finish', () => resolve(`/pdf/${filename}`));
+  });
 }
 
+/**
+ * 🏭 產生廠商採購彙總清單
+ */
 export async function generateVendorPdf(orderList) {
-  const outputDir = "public/pdf";
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
   const filename = `vendor-${Date.now()}.pdf`;
@@ -64,7 +80,9 @@ export async function generateVendorPdf(orderList) {
   });
 
   doc.end();
-  return new Promise((resolve) => stream.on('finish', () => resolve(`/pdf/${filename}`)));
+  return new Promise((resolve) => {
+    stream.on('finish', () => resolve(`/pdf/${filename}`));
+  });
 }
 
 export default { generateShippingPdf, generateVendorPdf };
