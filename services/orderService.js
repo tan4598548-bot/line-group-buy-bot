@@ -8,7 +8,6 @@ export async function handleOrder(req, res) {
 
     if (!p || !p.active) throw new Error("商品已結單或不存在");
 
-    // 需求 4a-2: 現貨搶購鎖定
     if (p.type === "overstock") {
       if (p.totalStock < qty) return res.status(400).json({ ok: false, error: "現貨庫存不足" });
       await sheet.decreaseProductStock(productCode, qty);
@@ -32,4 +31,9 @@ export async function getBuyerOrders(userId) {
   return orders.filter(o => o.lineUserId === userId);
 }
 
-export default { handleOrder, getBuyerOrders };
+// 補齊：供管理端 2. 訂單查詢 使用
+export async function getAllOrders() {
+  return await sheet.getOrders();
+}
+
+export default { handleOrder, getBuyerOrders, getAllOrders };
