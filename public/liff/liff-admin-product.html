@@ -1,63 +1,98 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8"><title>商品管理</title>
+  <meta charset="UTF-8">
+  <title>商品管理系統</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 15px; background: #fff; }
-    .nav { margin-bottom: 15px; } .btn-back { color: #007bff; text-decoration: none; font-weight: bold; }
-    .form-group { margin-bottom: 12px; }
-    label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 13px; color: #555; }
-    input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-    .btn-submit { width: 100%; padding: 15px; background: #06c755; color: white; border: none; font-weight: bold; border-radius: 8px; margin-top: 10px; }
+    body { font-family: sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
+    .product-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .product-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .product-title { font-weight: bold; font-size: 16px; color: #1c1e21; }
+    .product-info { font-size: 13px; color: #606770; line-height: 1.6; }
+    .tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; color: white; margin-left: 5px; }
+    .actions { display: flex; gap: 10px; margin-top: 15px; border-top: 1px solid #eee; pt: 10px; padding-top: 10px;}
+    .btn { flex: 1; padding: 8px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; }
+    .btn-edit { background: #e7f3ff; color: #1877f2; }
+    .btn-delete { background: #ffebe9; color: #fa3e3e; }
+    #status { text-align: center; padding: 20px; color: #65676b; }
   </style>
 </head>
 <body>
-  <div class="nav"><a href="liff-admin-dashboard.html" class="btn-back">❮ 返回管理中心</a></div>
-  <h3>📦 商品上架/編輯</h3>
-  <div class="form-group"><label>1. 商品名稱</label><input id="nameInput"></div>
-  <div class="form-group"><label>2. 賣價</label><input id="priceInput" type="number"></div>
-  <div class="form-group"><label>※ 成本 (計算利潤)</label><input id="costInput" type="number"></div>
-  <div class="form-group"><label>3. 結單日期</label><input id="dateInput" type="date"></div>
-  <div class="form-group"><label>4. 顏色/規格 (例: 紅,藍)</label><input id="colorInput" placeholder="多個請用逗號隔開"></div>
-  <div class="form-group"><label>4. 尺寸 (例: S,M,L)</label><input id="sizeInput" placeholder="選填，多個請用逗號隔開"></div>
-  <div class="form-group"><label>5. 詳細介紹</label><textarea id="descInput" rows="4"></textarea></div>
-  <div class="form-group"><label>6. 圖片網址</label><input id="imagesInput"></div>
-  <div class="form-group"><label>7. 影音連結</label><input id="ytInput"></div>
-  <div class="form-group"><label>8. 類型</label><select id="typeSelect"><option value="normal">預購</option><option value="overstock">現貨</option></select></div>
-  <button class="btn-submit" onclick="submitProduct()">💾 確認上架</button>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+    <h3 style="margin:0;">📦 商品管理</h3>
+    <button onclick="location.href='liff-admin-add-product.html'" style="background:#42b72a; color:white; border:none; padding:5px 10px; border-radius:4px;">+ 新增商品</button>
+  </div>
+  
+  <div id="status">⌛ 正在讀取雲端資料...</div>
+  <div id="product-list"></div>
 
 <script>
 async function init() {
-  await liff.init({ liffId: "2008857998-jbKsKkPY" });
-  if (!liff.isLoggedIn()) liff.login();
-}
-async function submitProduct() {
-  const profile = await liff.getProfile();
-  // 需求：規格分割。將顏色與尺寸合併為 API 接受的格式
-  const colorMap = `${document.getElementById('colorInput').value}|${document.getElementById('sizeInput').value}`;
-  
-  const body = {
-    productName: document.getElementById('nameInput').value,
-    price: Number(document.getElementById('priceInput').value),
-    cost: Number(document.getElementById('costInput').value),
-    closeDate: document.getElementById('dateInput').value,
-    colorMap: colorMap,
-    detailText: document.getElementById('descInput').value,
-    images: document.getElementById('imagesInput').value,
-    youtube: document.getElementById('ytInput').value,
-    type: document.getElementById('typeSelect').value
-  };
+  const status = document.getElementById("status");
+  const list = document.getElementById("product-list");
 
-  const res = await fetch("/api/admin/products/create", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-liff-user-id": profile.userId },
-    body: JSON.stringify(body)
-  });
-  if (res.ok) { alert("上架成功！"); location.href="liff-admin-dashboard.html"; }
+  try {
+    // 初始化 admin-product LIFF
+    await liff.init({ liffId: "2008857998-AoqmEajq" });
+
+    const res = await fetch("/api/products");
+    const products = await res.json();
+
+    if (products.length === 0) {
+      status.innerText = "目前試算表中無商品資料。";
+      return;
+    }
+
+    status.style.display = "none";
+    list.innerHTML = products.map(p => `
+      <div class="product-card">
+        <div class="product-header">
+          <div class="product-title">${p.productName}</div>
+          <div>
+            <span class="tag" style="background:${p.active==='TRUE'?'#42b72a':'#8e8e8e'}">${p.active==='TRUE'?'上架中':'已下架'}</span>
+          </div>
+        </div>
+        <div class="product-info">
+          代碼：${p.productCode} <br>
+          單價：$${p.price} <br>
+          類型：${p.type === 'overstock' ? '現貨' : '預購'} <br>
+          結單日：${p.closeDate || '未設定'}
+        </div>
+        <div class="actions">
+          <button class="btn btn-edit" onclick="editProduct('${p.productCode}')">修正</button>
+          <button class="btn btn-delete" onclick="deleteProduct('${p.productCode}')">刪除</button>
+        </div>
+      </div>
+    `).join("");
+
+  } catch (err) {
+    status.innerText = "❌ 無法載入： " + err.message;
+  }
 }
-init();
+
+function editProduct(code) {
+  // 導向編輯頁面 (未來擴充)
+  alert("修正功能：將開啟商品代碼 " + code + " 的編輯視窗");
+}
+
+async function deleteProduct(code) {
+  if (!confirm("確定要刪除商品 " + code + " 嗎？此動作將從 Google Sheet 移除。")) return;
+
+  try {
+    const res = await fetch("/api/products/" + code, { method: "DELETE" });
+    const result = await res.json();
+    if (result.ok) {
+      alert("商品已刪除");
+      location.reload();
+    }
+  } catch (err) {
+    alert("刪除失敗：" + err.message);
+  }
+}
+
+window.onload = init;
 </script>
 </body>
 </html>
