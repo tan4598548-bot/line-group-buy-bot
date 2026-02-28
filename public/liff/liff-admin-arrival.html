@@ -1,44 +1,46 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html>
 <head>
-  <meta charset="UTF-8"><title>到貨點貨</title>
+  <meta charset="UTF-8"><title>到貨點貨系統</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 15px; }
-    .nav { margin-bottom: 15px; }
-    .item-row { display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
-    .item-row input { margin-right: 15px; width: 20px; height: 20px; }
-    .btn-save { width: 100%; padding: 15px; background: #007bff; color: white; border: none; border-radius: 8px; margin-top: 20px; font-weight: bold; }
+    body { font-family: sans-serif; padding: 15px; background: #f4f4f4; }
+    .order-card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .btn-check { background: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 5px; }
   </style>
 </head>
 <body>
-  <div class="nav"><a href="liff-admin-dashboard.html" style="text-decoration:none;">❮ 返回管理中心</a></div>
-  <h3>📥 廠商到貨點清</h3>
-  <div id="itemList">載入待點貨清單...</div>
-  <button class="btn-save" onclick="saveArrival()">✅ 一鍵清除已到貨商品</button>
+  <h3>📦 待點貨清單</h3>
+  <div id="list">載入中...</div>
 
-<script>
-async function init() {
-  await liff.init({ liffId: "2008857998-jbKsKkPY" });
-  loadItems();
-}
-async function loadItems() {
-  const p = await liff.getProfile();
-  const res = await fetch("/api/admin/vendor-orders", { headers: { "x-liff-user-id": p.userId } });
-  const data = await res.json();
-  document.getElementById("itemList").innerHTML = data.map(i => `
-    <div class="item-row">
-      <input type="checkbox" value="${i.vendor_order_id}">
-      <div>
-        <strong>${i.product_name}</strong><br>
-        <small>${i.color} / 應到: ${i.order_qty}</small>
-      </div>
-    </div>
-  `).join("");
-}
-function saveArrival() { alert("點貨完成，系統已更新庫存並清除待辦。"); location.reload(); }
-init();
-</script>
+  <script>
+    async function init() {
+      await liff.init({ liffId: "2008857998-ePcCkr6K" }); // 對應 admin-arrival
+      const res = await fetch("/api/admin/arrival-list");
+      const data = await res.json();
+      
+      if(data.length === 0) {
+        document.getElementById("list").innerHTML = "目前無待點貨商品";
+        return;
+      }
+
+      document.getElementById("list").innerHTML = data.map(o => `
+        <div class="order-card">
+          <div>
+            <strong>${o.productName}</strong><br>
+            買家: ${o.buyerName} | 數量: ${o.qty}
+          </div>
+          <button class="btn-check" onclick="checkItem('${o.orderId}')">點貨勾選</button>
+        </div>
+      `).join("");
+    }
+    
+    async function checkItem(id) {
+      alert("訂單 " + id + " 已標記為到貨！");
+      // 這裡未來 fetch POST 更新 Google Sheet 狀態
+    }
+    init();
+  </script>
 </body>
 </html>

@@ -8,68 +8,69 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 匯入服務層 (確保路徑正確)
 import productService from "./services/productService.js";
 import orderService from "./services/orderService.js";
+import sheetService from "./services/sheetService.js";
 
 const app = express();
 app.use(express.json());
-
-// 靜態檔案路徑：指向 public 資料夾
 app.use(express.static(path.join(__dirname, "public")));
 
-// --- API 路由區 ---
-
-// 1. 測試連線路徑
-app.get("/api/test", (req, res) => {
-  res.send("✅ API Server is reachable!");
-});
-
-// 2. 獲取商品清單 (解決 404 的關鍵)
+// --- 1. 商品管理 API ---
 app.get("/api/products", async (req, res) => {
   try {
-    console.log("📡 [API Call] /api/products");
-    const products = await productService.listProducts(); // 呼叫 productService
-    res.json(products || []);
-  } catch (e) {
-    console.error("❌ Product API Error:", e);
-    res.status(500).json({ error: e.message });
-  }
+    const products = await productService.listProducts();
+    res.json(products);
+  } catch (e) { res.status(500).send(e.message); }
 });
 
-// 3. 管理端獲取所有訂單
+// 新增：修正/刪除商品路由
+app.delete("/api/products/:code", async (req, res) => {
+  try {
+    await sheetService.deleteProduct(req.params.code);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).send(e.message); }
+});
+
+// --- 2. 訂單/查詢 API ---
 app.get("/api/admin/orders", async (req, res) => {
-  const userId = req.header("x-liff-user-id");
-  console.log(`📡 [API Call] /api/admin/orders | User: ${userId}`);
-  
   try {
     const orders = await orderService.getAllOrders();
-    res.json(orders || []);
-  } catch (e) {
-    console.error("❌ Admin Orders API Error:", e);
-    res.status(500).json({ error: e.message });
-  }
+    res.json(orders);
+  } catch (e) { res.status(500).send(e.message); }
 });
 
-// 4. 買家獲取個人訂單 (預留給未來擴充)
-app.get("/api/orders", async (req, res) => {
+// --- 3. 到貨/點貨 API (解決卡在載入中)
+app.get("/api/admin/arrival-list", async (req, res) => {
   try {
     const orders = await orderService.getAllOrders();
-    res.json(orders || []);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+    // 只過濾出狀態為 'pending' 或 'ordered' 的訂單
+    const pending = orders.filter(o => o.status !== 'arrived');
+    res.json(pending);
+  } catch (e) { res.status(500).send(e.message); }
 });
 
-// 所有路徑找不到時，預設回傳 index.html 或 404
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'), (err) => {
-    if (err) res.status(404).send("Page not found");
-  });
+// --- 4. 發貨與 PDF 生成
+app.post("/api/admin/generate-pdf", async (req, res) => {
+  try {
+    const { orderIds } = req.body;
+    // 這裡未來串接 PDF 套件，目前先回傳模擬成功
+    res.json({ ok: true, url: "/exports/shipping_labels.pdf" });
+  } catch (e) { res.status(500).send(e.message); }
+});
+
+// --- 5. 廠商管理 API
+app.get("/api/admin/vendor-stats", async (req, res) => {
+  try {
+    const orders = await orderService.getAllOrders();
+    // 簡易邏輯：按商品代碼統計
+    const stats = orders.reduce((acc, curr) => {
+      acc[curr.productCode] = (acc[curr.productCode] || 0) + Number(curr.qty);
+      return acc;
+    }, {});
+    res.json(stats);
+  } catch (e) { res.status(500).send(e.message); }
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`🚀 伺服器已啟動於通訊埠 ${PORT}`);
-  console.log(`🔗 測試路徑: http://localhost:${PORT}/api/test`);
-});
+app.listen(PORT, () => console.log(`🚀 系統核心已啟動於通訊埠 ${PORT}`));

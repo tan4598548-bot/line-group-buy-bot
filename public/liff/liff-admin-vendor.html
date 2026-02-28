@@ -16,7 +16,7 @@
 
 <script>
 async function init() {
-  await liff.init({ liffId: "2008857998-jbKsKkPY" });
+  await liff.init({ liffId: "2008857998-481MeChx" });
   const p = await liff.getProfile();
   const res = await fetch("/api/admin/vendor-orders", { headers: { "x-liff-user-id": p.userId } });
   const data = await res.json();
