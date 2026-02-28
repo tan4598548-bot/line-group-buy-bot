@@ -10,23 +10,19 @@
     .nav { margin-bottom: 15px; } .btn-back { color: #007bff; text-decoration: none; font-weight: bold; }
     .order-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
     .error-box { background: #fee; border: 1px solid #fcc; color: #c33; padding: 15px; border-radius: 8px; margin-top: 10px; }
-    .id-debug { font-size: 10px; color: #ccc; margin-top: 20px; text-align: center; }
   </style>
 </head>
 <body>
   <div class="nav"><a href="liff-admin-dashboard.html" class="btn-back">❮ 返回管理中心</a></div>
-  <h3>📑 訂單/結單管理</h3>
-  <div id="status">⚙️ 系統初始化中...</div>
+  <h3>📑 訂單管理 (測試版)</h3>
+  <div id="status">⚙️ 正在初始化...</div>
   <div id="list"></div>
-  <div id="debugInfo" class="id-debug"></div>
 
   <script>
-    async function start() {
+    async function init() {
       const status = document.getElementById("status");
-      const debugInfo = document.getElementById("debugInfo");
-      
       try {
-        // 1. 初始化 LIFF (對齊 ID: 我的商品詳細)
+        // 對齊圖片中「我的商品詳細」ID
         await liff.init({ liffId: "2008857998-wtK5loPp" });
         
         if (!liff.isLoggedIn()) {
@@ -34,67 +30,50 @@
           return;
         }
 
-        // 2. 強制等待 Profile 載入
-        status.innerText = "🔑 正在識別身分...";
-        let profile = null;
-        let retryCount = 0;
-        
-        while (!profile && retryCount < 5) {
-          try {
-            profile = await liff.getProfile();
-          } catch (e) {
-            retryCount++;
-            await new Promise(r => setTimeout(r, 500)); // 等 0.5 秒再試
-          }
-        }
-
-        if (!profile || !profile.userId) {
-          throw new Error("無法取得 LINE UID，請重新開啟頁面");
-        }
-
+        const profile = await liff.getProfile();
         const userId = profile.userId;
-        debugInfo.innerText = "Current UID: " + userId;
+        status.innerText = "📡 正在請求 API...";
 
-        // 3. 發送請求 (明確帶入 userId)
-        status.innerText = "📡 正在連線後端...";
-        const res = await fetch("/api/admin/orders", {
+        // 修正點：使用絕對路徑防止路徑偏移，並加入快取清除
+        const apiUrl = window.location.origin + "/api/admin/orders";
+        console.log("Fetching:", apiUrl);
+
+        const res = await fetch(apiUrl, {
           method: "GET",
           headers: {
-            "Content-Type": "application/json",
-            "x-liff-user-id": String(userId).trim() // 強制轉字串並去空白
+            "Accept": "application/json",
+            "x-liff-user-id": userId
           }
         });
 
         if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          throw new Error(errBody.error || `伺服器回應錯誤 (${res.status})`);
+          const errText = await res.text();
+          throw new Error(`API 報錯 ${res.status}: ${errText}`);
         }
 
         const data = await res.json();
         status.style.display = "none";
 
         if (!data || data.length === 0) {
-          document.getElementById("list").innerHTML = "📭 目前暫無任何訂單。";
+          document.getElementById("list").innerHTML = "目前暫無訂單資料。";
           return;
         }
 
         document.getElementById("list").innerHTML = data.map(o => `
           <div class="order-card">
-            <strong>${o.productName || '未命名商品'}</strong><br>
-            <small>買家: ${o.buyerName || '未知'} | 數量: ${o.qty || 0}</small>
+            <strong>${o.productName || '商品'}</strong><br>
+            <small>買家: ${o.buyerName} | 數量: ${o.qty}</small>
           </div>
         `).join("");
 
       } catch (err) {
         status.style.display = "none";
-        document.getElementById("list").innerHTML = `
-          <div class="error-box">
-            <strong>⚠️ 存取失敗</strong><br>原因: ${err.message}
-          </div>`;
-        console.error("Init Error:", err);
+        // 強制彈窗，抓出前端隱藏的錯誤
+        alert("錯誤偵測: " + err.message);
+        document.getElementById("list").innerHTML = `<div class="error-box">⚠️ ${err.message}</div>`;
       }
     }
-    window.onload = start;
+    window.onload = init;
   </script>
 </body>
 </html>
