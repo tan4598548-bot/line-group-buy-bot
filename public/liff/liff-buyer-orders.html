@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>精選團購商品</title>
+  <title>商品清單</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
@@ -21,42 +21,36 @@
   </style>
 </head>
 <body>
-  <h3>🚀 精選團購商品</h3>
-  <div id="status">⌛ 正在下載商品清單...</div>
+  <h3>🛒 現正開團中</h3>
+  <div id="status">⌛ 正在載入商品...</div>
   <div id="list"></div>
 
 <script>
 async function init() {
   const status = document.getElementById("status");
-  const list = document.getElementById("list");
-  
   try {
-    // 初始化買家入口 LIFF ID
+    // 初始化 LIFF
     await liff.init({ liffId: "2008857998-jbKsKkPY" });
 
-    // 呼叫商品清單 API
-    const res = await fetch("/api/products");
-    if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
-    
-    const data = await res.json();
-    
-    // 關鍵修正：必須精確對應試算表 E 欄的 'TRUE' 字串
-    const activeProducts = data.filter(p => p.active === 'TRUE');
+    // 使用嘗試抓取資料
+    const response = await fetch('/api/products');
+    if (!response.ok) throw new Error("API 路徑錯誤 (404)");
 
-    if (activeProducts.length === 0) {
-      status.innerText = "📭 目前暫無開團中的商品。";
+    const data = await response.json();
+    const active = data.filter(p => p.active === 'TRUE');
+
+    if (active.length === 0) {
+      status.innerText = "目前沒有上架中的商品。";
       return;
     }
 
     status.style.display = "none";
-    list.innerHTML = activeProducts.map(p => `
+    document.getElementById("list").innerHTML = active.map(p => `
       <a href="liff-order.html?code=${p.productCode}" class="item-row">
         <img src="${p.images ? p.images.split(',')[0] : 'https://via.placeholder.com/70'}" class="item-img">
         <div class="item-info">
           <div class="item-name">
-            <span class="tag" style="background:${p.type==='overstock'?'#ff9500':'#007bff'}">
-              ${p.type==='overstock'?'現貨':'預購'}
-            </span>
+            <span class="tag" style="background:${p.type==='overstock'?'#ff9500':'#007bff'}">${p.type==='overstock'?'現貨':'預購'}</span>
             ${p.productName}
           </div>
           <div class="item-price">$${p.price}</div>
@@ -64,9 +58,7 @@ async function init() {
         <div style="color:#ccc">❯</div>
       </a>
     `).join("");
-
   } catch (err) {
-    console.error("載入出錯:", err);
     status.innerText = "❌ 載入失敗: " + err.message;
   }
 }
