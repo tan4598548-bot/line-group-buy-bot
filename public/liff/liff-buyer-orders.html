@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8"><title>商品清單</title>
+  <meta charset="UTF-8">
+  <title>精選團購商品</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
@@ -16,33 +17,61 @@
     .item-name { font-weight: bold; font-size: 15px; color: #333; }
     .item-price { color: #e44d26; font-weight: bold; margin-top: 5px; }
     .tag { font-size: 10px; padding: 2px 6px; border-radius: 4px; color: white; margin-right: 5px; }
+    #status { text-align: center; padding: 20px; color: #666; font-size: 14px; }
   </style>
 </head>
 <body>
-  <h3>🛒 現正開團中</h3>
-  <div id="list">載入中...</div>
+  <h3>🚀 精選團購商品</h3>
+  <div id="status">⌛ 正在下載商品清單...</div>
+  <div id="list"></div>
 
 <script>
 async function init() {
-  await liff.init({ liffId: "2008857998-jbKsKkPY" });
-  const res = await fetch("/api/products");
-  const data = await res.json();
-  const active = data.filter(p => p.active);
-  document.getElementById("list").innerHTML = active.map(p => `
-    <a href="liff-order.html?code=${p.productCode}" class="item-row">
-      <img src="${p.images ? p.images.split(',')[0] : 'https://via.placeholder.com/70'}" class="item-img">
-      <div class="item-info">
-        <div class="item-name">
-          <span class="tag" style="background:${p.type==='overstock'?'#ff9500':'#007bff'}">${p.type==='overstock'?'現貨':'預購'}</span>
-          ${p.productName}
+  const status = document.getElementById("status");
+  const list = document.getElementById("list");
+  
+  try {
+    // 1. 初始化 LIFF (對齊您的買家入口 ID)
+    await liff.init({ liffId: "2008857998-jbKsKkPY" });
+
+    // 2. 獲取商品資料
+    const res = await fetch("/api/products");
+    if (!res.ok) throw new Error("無法取得商品資料");
+    
+    const data = await res.json();
+    
+    // 3. 過濾已上架商品 (對齊您的 Google Sheet: 是否上架)
+    // 注意：後端 API 傳回時若標題是 snake_case，這裡要對應 p.is_active 或 p.active
+    const activeProducts = data.filter(p => p.active === 'TRUE' || p.active === true);
+
+    if (activeProducts.length === 0) {
+      status.innerText = "📭 目前暫時沒有開團中的商品。";
+      return;
+    }
+
+    status.style.display = "none";
+    list.innerHTML = activeProducts.map(p => `
+      <a href="liff-order.html?code=${p.productCode || p.product_code}" class="item-row">
+        <img src="${p.images ? p.images.split(',')[0] : 'https://via.placeholder.com/70'}" class="item-img">
+        <div class="item-info">
+          <div class="item-name">
+            <span class="tag" style="background:${p.type==='overstock'?'#ff9500':'#007bff'}">
+              ${p.type==='overstock'?'現貨':'預購'}
+            </span>
+            ${p.productName || p.product_name}
+          </div>
+          <div class="item-price">$${p.price}</div>
         </div>
-        <div class="item-price">$${p.price}</div>
-      </div>
-      <div style="color:#ccc">❯</div>
-    </a>
-  `).join("");
+        <div style="color:#ccc">❯</div>
+      </a>
+    `).join("");
+
+  } catch (err) {
+    console.error(err);
+    status.innerText = "❌ 載入失敗: " + err.message;
+  }
 }
-init();
+window.onload = init;
 </script>
 </body>
 </html>

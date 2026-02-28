@@ -1,118 +1,124 @@
-import { google } from "googleapis";
-import dotenv from "dotenv";
+import { google } from 'googleapis';
 
-dotenv.config();
-
-let credentials = {};
-try {
-  credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-} catch (error) {
-  console.error("❌ Google Service Account JSON 解析失敗");
-}
-
+// 初始化 Google Sheets API
 const auth = new google.auth.GoogleAuth({
-  credentials,
-  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
-const sheets = google.sheets({ version: "v4", auth });
+const sheets = google.sheets({ version: 'v4', auth });
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
-async function readSheet(range) {
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range });
-  return res.data.values || [];
-}
+export const sheetService = {
+  /**
+   * 1. 讀取商品列表 (對應 Products 分頁)
+   */
+  async getProducts() {
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'Products!A:M', 
+      });
 
-export async function writeCell(sheet, cell, value) {
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheet}!${cell}`,
-    valueInputOption: "RAW",
-    requestBody: { values: [[value]] },
-  });
-}
+      const rows = response.data.values;
+      if (!rows || rows.length <= 1) return [];
 
-export async function replaceVendorOrders(list) {
-  const values = [
-    ["productCode", "productName", "color", "size", "qty", "status", "updated_at"],
-    ...list.map(i => [i.productCode, i.productName, i.color, i.size || "", i.qty, "ordered", new Date().toISOString()])
-  ];
-  await sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range: "VendorOrders!A:G" });
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: "VendorOrders!A1",
-    valueInputOption: "RAW",
-    requestBody: { values }
-  });
-}
+      const headers = rows[0];
+      return rows.slice(1).map(row => {
+        const getVal = (name) => {
+          const index = headers.indexOf(name);
+          return (index !== -1 && row[index]) ? row[index] : '';
+        };
 
-export async function getProducts() {
-  const rows = await readSheet("Products!A:M");
-  if (rows.length <= 1) return [];
-  return rows.slice(1).map((r, i) => ({
-    productCode: r[0] || "",
-    productName: r[1] || "",
-    colorMap: r[2] || "",
-    price: Number(r[3]) || 0,
-    active: r[4] === "TRUE",
-    closeDate: r[5] || "",
-    notified: r[6] === "TRUE",
-    detailText: r[7] || "",
-    images: r[8] || "",
-    youtube: r[9] || "",
-    video: r[10] || "",
-    type: r[11] || "normal",
-    totalStock: Number(r[12]) || 0,
-    _row: i + 2
-  }));
-}
+        return {
+          productCode: getVal('商品代碼'), // A 欄
+          productName: getVal('商品名稱'), // B 欄
+          colorMap: getVal('顏色對照'),    // C 欄
+          price: Number(getVal('單價')) || 0, // D 欄
+          active: getVal('是否上架'),      // E 欄 (關鍵：前端用來過濾顯示)
+          closeDate: getVal('結單日'),     // F 欄
+          images: getVal('images'),        // I 欄
+          type: getVal('type') || 'normal' // L 欄
+        };
+      });
+    } catch (e) {
+      console.error("getProducts Error:", e.message);
+      return [];
+    }
+  },
 
-export async function appendProduct(p) {
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID, range: "Products!A1", valueInputOption: "RAW",
-    requestBody: { values: [[p.productCode, p.productName, p.colorMap, p.price, "TRUE", p.closeDate, "FALSE", p.detailText, p.images, p.youtube, p.video, p.type, p.totalStock]] }
-  });
-}
+  /**
+   * 2. 寫入新商品 (對應 Products 分頁)
+   */
+  async appendProduct(data) {
+    try {
+      const rowValue = [
+        data.productCode,   // A: 商品代碼
+        data.productName,   // B: 商品名稱
+        data.colorMap,      // C: 顏色對照
+        data.price,         // D: 單價
+        'TRUE',             // E: 是否上架
+        data.closeDate,     // F: 結單日
+        '',                 // G: 已提醒
+        data.detailText,    // H: detailText
+        data.images,        // I: images
+        data.youtube,       // J: youtube
+        data.video,         // K: video
+        data.type,          // L: type
+        data.totalStock     // M: total_stock
+      ];
 
-export async function getOrders() {
-  try {
-    const rows = await readSheet("Orders!A:M");
-    if (rows.length <= 1) return [];
-    return rows.slice(1).map((r, i) => ({
-      orderId: r[0] || "",
-      productCode: r[1] || "",
-      productName: r[2] || "",
-      type: r[3] || "",
-      lineUserId: r[4] || "",
-      buyerName: r[5] || "",
-      color: r[6] || "",
-      size: r[7] || "",
-      qty: Number(r[8]) || 0,
-      price: Number(r[9]) || 0,
-      status: r[10] || "",
-      note: r[11] || "",
-      createdAt: r[12] || "",
-      _row: i + 2
-    }));
-  } catch (e) {
-    console.error("G-Sheet Orders 讀取失敗:", e);
-    return [];
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'Products!A:M',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [rowValue] },
+      });
+      return { ok: true };
+    } catch (e) {
+      throw new Error("寫入商品失敗: " + e.message);
+    }
+  },
+
+  /**
+   * 3. 讀取訂單列表 (對應 Orders 分頁)
+   */
+  async getOrders() {
+    try {
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'Orders!A:M',
+      });
+
+      const rows = response.data.values;
+      if (!rows || rows.length <= 1) return [];
+
+      const headers = rows[0];
+      return rows.slice(1).map(row => {
+        const getVal = (name) => {
+          const index = headers.indexOf(name);
+          return (index !== -1 && row[index]) ? row[index] : '';
+        };
+
+        return {
+          orderId: getVal('order_ID'),       // A 欄
+          productCode: getVal('product_code'), // B 欄
+          productName: getVal('product_name'), // C 欄
+          lineId: getVal('line_id'),           // D 欄 (關鍵：買家查詢訂單用)
+          buyerName: getVal('buyer_name'),     // E 欄
+          color: getVal('color'),              // F 欄
+          size: getVal('size'),                // G 欄
+          qty: Number(getVal('qty')) || 0,     // H 欄
+          price: Number(getVal('price')) || 0, // I 欄
+          status: getVal('status'),            // J 欄
+          createdAt: getVal('created_at')      // L 欄
+        };
+      });
+    } catch (e) {
+      console.error("getOrders Error:", e.message);
+      return [];
+    }
   }
-}
+};
 
-export async function appendOrder(o) {
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID, range: "Orders!A1", valueInputOption: "RAW",
-    requestBody: { values: [[o.orderId, o.productCode, o.productName, o.type, o.lineUserId, o.buyerName, o.color, o.size, o.qty, o.price, o.status, o.note || "", new Date().toISOString()]] }
-  });
-}
-
-export async function updateOrderStatus(row, status) { await writeCell("Orders", `K${row}`, status); }
-
-export async function decreaseProductStock(productCode, qty) {
-  const products = await getProducts();
-  const p = products.find(i => i.productCode === productCode);
-  if (p) await writeCell("Products", `M${p._row}`, Math.max(0, p.totalStock - qty));
-}
-
-export default { getProducts, appendProduct, getOrders, appendOrder, updateOrderStatus, decreaseProductStock, writeCell, replaceVendorOrders };
+export default sheetService;
