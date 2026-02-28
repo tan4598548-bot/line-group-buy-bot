@@ -5,7 +5,6 @@ export async function handleOrder(req, res) {
     const { productCode, qty, lineUserId, buyerName, color, size } = req.body;
     const products = await sheet.getProducts();
     const p = products.find(x => x.productCode === productCode);
-
     if (!p || !p.active) throw new Error("商品已結單或不存在");
 
     const orderId = `ORD${Date.now()}`;
@@ -14,11 +13,8 @@ export async function handleOrder(req, res) {
       lineUserId, buyerName, color, size, qty: Number(qty),
       price: p.price, status: "ordered"
     });
-
     res.json({ ok: true, orderId });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 }
 
 export async function getBuyerOrders(userId) {
@@ -26,9 +22,10 @@ export async function getBuyerOrders(userId) {
   return orders.filter(o => o.lineUserId === userId);
 }
 
-// 修正 400 錯誤：新增管理端獲取全部訂單的函式
+// 供管理端呼叫
 export async function getAllOrders() {
-  return await sheet.getOrders();
+  const orders = await sheet.getOrders();
+  return Array.isArray(orders) ? orders : [];
 }
 
 export default { handleOrder, getBuyerOrders, getAllOrders };

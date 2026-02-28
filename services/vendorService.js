@@ -3,7 +3,7 @@ import pdfService from "./pdfService.js";
 
 async function buildVendorOrders() {
   const orders = await sheetService.getOrders();
-  const pendingOrders = orders.filter(o => o.status === "ordered");
+  const pendingOrders = orders.filter(o => o.status === "ordered" || o.status === "arrived");
   
   const map = {};
   for (const o of pendingOrders) {
@@ -22,7 +22,6 @@ async function buildVendorOrders() {
   return Object.values(map);
 }
 
-// 供 index.js 呼叫
 export async function getVendorSummary() {
   return await buildVendorOrders();
 }
