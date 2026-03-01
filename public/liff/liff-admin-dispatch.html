@@ -7,68 +7,67 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
-    body { font-family: "PingFang TC", "Microsoft JhengHei", sans-serif; padding: 15px; background: #f0f2f5; }
-    .btn-pdf { background: #00c300; color: white; border: none; width: 100%; padding: 15px; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; }
-    /* 隱藏的標籤模板，專門給截圖用 */
+    body { font-family: "Microsoft JhengHei", sans-serif; padding: 15px; background: #f0f2f5; }
+    .btn-pdf { background: #007bff; color: white; border: none; width: 100%; padding: 18px; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; position: fixed; bottom: 20px; left: 5%; width: 90%; }
     #pdf-template { position: absolute; left: -9999px; top: 0; }
-    .label-box { width: 300px; height: 180px; padding: 20px; border: 2px solid #000; background: white; margin-bottom: 10px; }
-    .label-name { font-size: 28px; font-weight: bold; margin-bottom: 10px; }
-    .label-item { font-size: 18px; color: #333; }
+    .label-box { width: 350px; height: 200px; padding: 25px; border: 2px solid #000; background: white; }
+    .label-name { font-size: 32px; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #eee; }
+    .label-item { font-size: 20px; margin-bottom: 5px; }
   </style>
 </head>
 <body>
-  <h3>🖨 發貨管理 (中文支援)</h3>
-  <div id="order-info">載入中...</div>
-  <br>
-  <button class="btn-pdf" id="pdfBtn" onclick="generateChinesePDF()">產生中文 PDF 標籤</button>
-
+  <h3>🖨 發貨標籤產出 (已到貨清單)</h3>
+  <div id="ready-list">載入中...</div>
+  <button class="btn-pdf" id="pdfBtn" onclick="generateChinesePDF()">🖨 產生中文標籤 PDF</button>
   <div id="pdf-template"></div>
 
-<script>
+  <script>
     let readyOrders = [];
     async function init() {
       await liff.init({ liffId: "2008857998-A7Wv6re4" });
+      loadReady();
+    }
+
+    async function loadReady() {
       const res = await fetch("/api/admin/orders");
       const data = await res.json();
       readyOrders = data.filter(o => o.status === '已到貨');
-      document.getElementById("order-info").innerText = `目前有 ${readyOrders.length} 筆已到貨訂單可發貨`;
+      document.getElementById("ready-list").innerHTML = readyOrders.map(o => `
+        <div style="background:white; padding:10px; margin-bottom:8px; border-radius:5px;">
+          <strong>${o.buyerName}</strong> - ${o.productName} (${o.qty}件)
+        </div>
+      `).join("") || "尚無可發貨商品";
     }
 
     async function generateChinesePDF() {
+      if (readyOrders.length === 0) { alert("沒有可發貨的訂單"); return; }
       const btn = document.getElementById("pdfBtn");
-      btn.innerText = "產生中...請稍候";
-      btn.disabled = true;
+      btn.innerText = "產生中...請稍候"; btn.disabled = true;
 
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF('l', 'mm', [100, 60]); // 標籤尺寸 100x60mm
+      const pdf = new jsPDF('l', 'mm', [100, 60]);
       const template = document.getElementById("pdf-template");
 
       for (let i = 0; i < readyOrders.length; i++) {
         const o = readyOrders[i];
-        // 1. 動態產出 HTML 內容
         template.innerHTML = `
-          <div class="label-box" id="label-${i}">
+          <div class="label-box" id="tmp-box">
             <div class="label-name">${o.buyerName}</div>
-            <div class="label-item">商品：${o.productName}</div>
-            <div class="label-item">數量：${o.qty}</div>
-            <div style="margin-top:10px; font-size:12px;">編號：${o.orderId}</div>
+            <div class="label-item">品名：${o.productName}</div>
+            <div class="label-item">數量：${o.qty} 件</div>
+            <div style="font-size:12px; margin-top:15px;">訂單編號：${o.orderId}</div>
           </div>
         `;
-
-        // 2. 將 HTML 轉為 Canvas 圖片
-        const canvas = await html2canvas(document.querySelector(`#label-${i}`), { scale: 2 });
+        await new Promise(r => setTimeout(r, 150)); // 等待 DOM 渲染
+        const canvas = await html2canvas(document.querySelector("#tmp-box"), { scale: 2 });
         const imgData = canvas.toDataURL('image/jpeg', 1.0);
-
-        // 3. 加入 PDF
         if (i > 0) pdf.addPage([100, 60], 'l');
         pdf.addImage(imgData, 'JPEG', 0, 0, 100, 60);
       }
-
-      pdf.save("發貨標籤.pdf");
-      btn.innerText = "產生完成";
-      btn.disabled = false;
+      pdf.save(`發貨單_${new Date().getTime()}.pdf`);
+      btn.innerText = "產生完成"; btn.disabled = false;
     }
     window.onload = init;
-</script>
+  </script>
 </body>
 </html>

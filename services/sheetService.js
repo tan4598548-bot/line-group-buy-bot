@@ -13,7 +13,6 @@ export const sheetService = {
   // A. 商品管理功能 (Products 工作表)
   // ==========================================
 
-  // 1. 讀取商品列表
   async getProducts() {
     try {
       const res = await sheets.spreadsheets.values.get({ 
@@ -41,7 +40,6 @@ export const sheetService = {
     }
   },
 
-  // 2. 修正/更新商品資訊
   async updateProduct(code, data) {
     try {
       const res = await sheets.spreadsheets.values.get({ 
@@ -73,7 +71,6 @@ export const sheetService = {
     }
   },
 
-  // 3. 新增商品
   async appendProduct(d) {
     try {
       const specs = `規格:${d.colorMap} | 尺寸:${d.sizeMap}`;
@@ -94,7 +91,6 @@ export const sheetService = {
     }
   },
 
-  // 4. 刪除商品
   async deleteProduct(code) {
     try {
       const res = await sheets.spreadsheets.values.get({ 
@@ -122,10 +118,9 @@ export const sheetService = {
   },
 
   // ==========================================
-  // B. 訂單與發貨功能 (Orders 工作表)
+  // B. 訂單與拆單點貨功能 (Orders 工作表)
   // ==========================================
 
-  // 5. 讀取訂單
   async getOrders() {
     try {
       const res = await sheets.spreadsheets.values.get({ 
@@ -151,30 +146,71 @@ export const sheetService = {
     }
   },
 
-  // 6. 點貨更新狀態 (更新 K 欄)
-  async updateOrderStatus(orderId, status) {
+  // 核心修正：支援拆單邏輯
+  async updateOrderStatus(orderId, data) {
     try {
+      const { status, split, arrivalQty } = data;
       const res = await sheets.spreadsheets.values.get({ 
         spreadsheetId: SPREADSHEET_ID, 
-        range: 'Orders!A:A' 
+        range: 'Orders!A:M' 
       });
-      const rowIndex = res.data.values.findIndex(r => r[0] === String(orderId)) + 1;
-      if (rowIndex === 0) throw new Error("找不到訂單");
+      const rows = res.data.values;
+      const headers = rows[0];
+      const rowIndex = rows.findIndex(r => r[0] === String(orderId));
+      
+      if (rowIndex === -1) throw new Error("找不到訂單");
 
-      // 假設狀態標籤位於 K 欄 (第 11 欄)
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `Orders!K${rowIndex}`,
-        valueInputOption: 'USER_ENTERED',
-        resource: { values: [[status]] }
-      });
+      if (split) {
+        // 1. 計算剩餘數量
+        const originalRow = [...rows[rowIndex]];
+        const qtyIdx = headers.indexOf('qty');
+        const statusIdx = headers.indexOf('status');
+        
+        const originalTotal = parseInt(originalRow[qtyIdx]);
+        const remainingQty = originalTotal - arrivalQty;
+
+        // 2. 更新原始行：數量改為「本次到貨數」，狀態改為「已到貨」
+        // 使用 update 修改該行的 qty (H欄) 與 status (K欄)
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `Orders!H${rowIndex + 1}`, // 數量欄位
+          valueInputOption: 'USER_ENTERED',
+          resource: { values: [[arrivalQty]] }
+        });
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `Orders!K${rowIndex + 1}`, // 狀態欄位
+          valueInputOption: 'USER_ENTERED',
+          resource: { values: [['已到貨']] }
+        });
+
+        // 3. 新增剩餘數量的行：狀態設為「待點貨」
+        const newRow = [...originalRow];
+        newRow[0] = `${orderId}-rem${Date.now().toString().slice(-4)}`; // 生成不重複 ID
+        newRow[qtyIdx] = remainingQty;
+        newRow[statusIdx] = '待點貨';
+
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: 'Orders!A:M',
+          valueInputOption: 'USER_ENTERED',
+          resource: { values: [newRow] }
+        });
+      } else {
+        // 一般更新：僅更新 K 欄狀態
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `Orders!K${rowIndex + 1}`,
+          valueInputOption: 'USER_ENTERED',
+          resource: { values: [[status]] }
+        });
+      }
     } catch (e) {
       console.error("updateOrderStatus Error:", e);
       throw e;
     }
   },
 
-  // 7. 一鍵清除已到貨商品
   async clearArrivedOrders() {
     try {
       const res = await sheets.spreadsheets.values.get({ 
@@ -187,10 +223,8 @@ export const sheetService = {
       const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
       const sId = meta.data.sheets.find(s => s.properties.title === 'Orders').properties.sheetId;
 
-      // 重要：從下往上刪除以避免索引偏移
-      // 只會刪除狀態精確為「已到貨」的資料，「部分到貨」會保留。
       for (let i = rows.length - 1; i >= 1; i--) {
-        if (rows[i][10] === '已到貨') { // K 欄索引為 10
+        if (rows[i][10] === '已到貨') { 
           await sheets.spreadsheets.batchUpdate({
             spreadsheetId: SPREADSHEET_ID,
             resource: { 
