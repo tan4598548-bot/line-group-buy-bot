@@ -28,6 +28,24 @@ app.get("/api/products", async (req, res) => {
   try { res.json(await sheetService.getProducts(req.query.filter)); } 
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// 新增：儲存/更新單一商品 (對接 liff-admin-products.html 的 saveEdit)
+app.put("/api/products/:code", async (req, res) => {
+  try {
+    const code = req.params.code;
+    await sheetService.updateProduct(code, req.body); // 需確保 sheetService 有此方法
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 新增：刪除商品 (對接 liff-admin-products.html 的 deleteItem)
+app.delete("/api/products/:code", async (req, res) => {
+  try {
+    await sheetService.deleteProduct(req.params.code); // 需確保 sheetService 有此方法
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post("/api/products", async (req, res) => {
   try { await sheetService.appendProduct(req.body); res.json({ ok: true }); } 
   catch (e) { res.status(500).json({ error: e.message }); }
@@ -51,14 +69,37 @@ app.post('/api/admin/products/out-of-stock', async (req, res) => {
   } catch (e) { res.status(500).send(e.message); }
 });
 
-// --- 訂單與發貨 API ---
+// --- 訂單 API ---
+
+// 新增：買家下單 POST (對接 product-detail.html)
+app.post("/api/admin/orders", async (req, res) => {
+  try {
+    await sheetService.appendOrder(req.body); // 需確保 sheetService 有此方法
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("/api/admin/orders", async (req, res) => {
   try { res.json(await sheetService.getOrders()); } 
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// 優化：更新訂單 (處理數量修改與狀態變更)
 app.put("/api/admin/orders/:id/status", async (req, res) => {
   try {
-    await sheetService.updateOrderAndSplit(req.params.id, req.body);
+    const orderId = req.params.id;
+    const updateData = req.body;
+
+    // 如果有傳入 qty，代表是買家修改數量，需要重新計算 total
+    if (updateData.qty && !updateData.total) {
+      const orders = await sheetService.getOrders();
+      const currentOrder = orders.find(o => String(o.orderId) === String(orderId));
+      if (currentOrder) {
+        updateData.total = Number(currentOrder.price) * Number(updateData.qty);
+      }
+    }
+
+    await sheetService.updateOrderAndSplit(orderId, updateData);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

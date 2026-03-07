@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>商品詳情</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    :root { --primary-color: #06c755; --price-color: #e44d26; }
+    body { font-family: -apple-system, sans-serif; background: #fff; margin: 0; padding-bottom: 100px; }
+    
+    .nav-top { padding: 15px; display: flex; align-items: center; border-bottom: 1px solid #eee; position: sticky; top: 0; background: white; z-index: 10; }
+    .back-btn { text-decoration: none; font-size: 20px; color: #333; margin-right: 15px; }
+
+    .media-box { width: 100%; background: #000; }
+    .media-box img, .media-box iframe { width: 100%; aspect-ratio: 16 / 9; display: block; border: none; object-fit: cover; }
+
+    .content-card { padding: 20px; }
+    .price-tag { font-size: 24px; color: var(--price-color); font-weight: bold; margin-bottom: 10px; }
+    .price-tag::before { content: "$"; font-size: 16px; margin-right: 2px; }
+    .product-title { font-size: 20px; font-weight: bold; line-height: 1.4; margin-bottom: 15px; }
+    
+    .section-title { font-size: 14px; font-weight: bold; color: #666; margin-top: 20px; border-left: 4px solid var(--primary-color); padding-left: 8px; }
+    .description-box { font-size: 15px; color: #444; margin-top: 10px; white-space: pre-line; line-height: 1.6; }
+
+    /* 規格選擇器 */
+    .selector-box { background: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 15px; }
+    .spec-label { font-size: 13px; color: #888; margin-bottom: 8px; display: block; }
+    select, input { width: 100%; height: 44px; border: 1px solid #ddd; border-radius: 8px; padding: 0 10px; margin-bottom: 10px; font-size: 14px; box-sizing: border-box; }
+
+    /* 底部按鈕 */
+    .footer-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 16px; border-top: 1px solid #eee; display: flex; gap: 10px; }
+    .btn-submit { flex: 1; height: 48px; background: var(--primary-color); color: white; border: none; border-radius: 24px; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .btn-submit:disabled { background: #ccc; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <div class="nav-top">
+    <a href="liff-order.html" class="back-btn">⬅</a>
+    <span style="font-weight:bold;">商品資訊</span>
+  </div>
+
+  <div id="mediaContainer" class="media-box"></div>
+
+  <div class="content-card">
+    <div id="pPrice" class="price-tag">0</div>
+    <div id="pName" class="product-title">讀取中...</div>
+    
+    <div class="selector-box">
+      <span class="spec-label">選擇規格與數量</span>
+      <select id="specSel"><option value="">載入規格中...</option></select>
+      <input type="number" id="qtyInput" value="1" min="1">
+    </div>
+
+    <div class="section-title">商品介紹</div>
+    <div id="pDesc" class="description-box"></div>
+  </div>
+
+  <div class="footer-bar">
+    <button id="submitBtn" class="btn-submit" onclick="submitOrder()">🛒 立即下單</button>
+  </div>
+
+<script>
+let product = null;
+let user = {};
+
+async function init() {
+  await liff.init({ liffId: "2008857998-imqg5sNq" });
+  if (!liff.isLoggedIn()) { liff.login(); return; }
+  const profile = await liff.getProfile();
+  user = { id: profile.userId, name: profile.displayName };
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  
+  const res = await fetch("/api/products");
+  const products = await res.json();
+  product = products.find(p => p.productCode === code);
+
+  if (product) render();
+}
+
+function render() {
+  document.getElementById('pName').innerText = product.productName;
+  document.getElementById('pPrice').innerText = product.price;
+  document.getElementById('pDesc').innerText = product.description || "暫無詳細說明";
+
+  // 影音處理 (保留您舊檔邏輯)
+  const media = document.getElementById('mediaContainer');
+  if (product.youtube) {
+    const vid = product.youtube.includes('v=') ? product.youtube.split('v=')[1].split('&')[0] : product.youtube.split('/').pop();
+    media.innerHTML = `<iframe src="https://www.youtube.com/embed/${vid}" allowfullscreen></iframe>`;
+  } else {
+    const firstImg = product.images ? product.images.split(',')[0] : 'https://via.placeholder.com/800x450';
+    media.innerHTML = `<img src="${firstImg}">`;
+  }
+
+  // 規格解析 (支援 顏色|尺寸 或 單一規格)
+  const specSel = document.getElementById('specSel');
+  if (product.specSize) {
+    const specs = product.specSize.split('|').flatMap(s => s.split(',')).filter(s => s.trim());
+    specSel.innerHTML = specs.map(s => `<option value="${s.trim()}">${s.trim()}</option>`).join('');
+  } else {
+    specSel.innerHTML = `<option value="單一規格">單一規格</option>`;
+  }
+
+  // 結單鎖定邏輯
+  if (product.status === '已結單') {
+    const btn = document.getElementById('submitBtn');
+    btn.innerText = "已結單 (停止收單)";
+    btn.disabled = true;
+  }
+}
+
+async function submitOrder() {
+  const qty = document.getElementById('qtyInput').value;
+  const spec = document.getElementById('specSel').value;
+
+  const payload = {
+    buyerId: user.id,
+    buyerName: user.name,
+    productCode: product.productCode,
+    productName: product.productName,
+    spec: spec,
+    qty: parseInt(qty),
+    price: product.price,
+    total: product.price * qty,
+    status: '待點貨'
+  };
+
+  const res = await fetch('/api/admin/orders', { // 這裡對接您後端的 API 路徑
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (res.ok) {
+    alert("✅ 下單成功！");
+    window.location.href = "liff-buyer-orders.html";
+  }
+}
+window.onload = init;
+</script>
+</body>
+</html>
