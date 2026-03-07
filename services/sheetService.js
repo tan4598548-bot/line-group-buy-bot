@@ -35,8 +35,13 @@ export const sheetService = {
 
   async appendProduct(d) {
     const generatedCode = d.productCode || `P${Date.now().toString().slice(-8)}`;
-    const specs = `規格:${d.colorMap || '無'} | 尺寸:${d.sizeMap || '無'}`;
-    const row = [generatedCode, d.productName, specs, d.price, '上架', d.closeDate, d.isStock || 'FALSE', d.cost, d.images, d.youtube, d.video, d.type, d.total_stock, d.description];
+    // 優化：規格儲存邏輯，若已有 specSize 則直接使用
+    const specs = d.specSize || `規格:${d.colorMap || '無'} | 尺寸:${d.sizeMap || '無'}`;
+    const row = [
+      generatedCode, d.productName, specs, d.price, '上架', 
+      d.closeDate, d.isStock || 'FALSE', d.cost || 0, d.images, 
+      d.youtube, d.video, d.type, d.stock || 0, d.description
+    ];
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID, range: 'Products!A:N',
       valueInputOption: 'USER_ENTERED', resource: { values: [row] }
@@ -44,14 +49,51 @@ export const sheetService = {
     return generatedCode;
   },
 
-  async updateProductStatus(code, newStatus) {
+  // 新增：更新商品詳細資訊 (對接管理端編輯)
+  async updateProduct(code, data) {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Products!A:A' });
     const idx = res.data.values.findIndex(r => r[0] === code) + 1;
-    if (idx <= 0) return;
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID, range: `Products!E${idx}`,
-      valueInputOption: 'USER_ENTERED', resource: { values: [[newStatus]] }
-    });
+    if (idx <= 1) throw new Error("找不到該商品代碼");
+
+    // 取得標題列以確定欄位索引
+    const headerRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Products!1:1' });
+    const headers = headerRes.data.values[0];
+
+    const updates = [];
+    const fieldMap = {
+      productName: '商品名稱', price: '單價', status: '狀態',
+      specSize: '規格尺寸', description: '說明', images: '圖片',
+      isStock: '是否現貨', type: '類型', cost: '成本'
+    };
+
+    for (const [key, value] of Object.entries(data)) {
+      if (fieldMap[key]) {
+        const colIdx = headers.indexOf(fieldMap[key]);
+        if (colIdx !== -1) {
+          const colLetter = String.fromCharCode(65 + colIdx);
+          updates.push({
+            range: `Products!${colLetter}${idx}`,
+            values: [[value]]
+          });
+        }
+      }
+    }
+
+    if (updates.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: { data: updates, valueInputOption: 'USER_ENTERED' }
+      });
+    }
+  },
+
+  async updateProductStatus(code, newStatus) {
+    return this.updateProduct(code, { status: newStatus });
+  },
+
+  // 新增：刪除商品 (實作為將狀態改為「已刪除」或標記)
+  async deleteProduct(code) {
+    return this.updateProduct(code, { status: '已下架/刪除' });
   },
 
   // --- 2. 訂單與發貨 (Orders 表 A-K) ---
@@ -73,45 +115,71 @@ export const sheetService = {
     } catch (e) { return []; }
   },
 
+  // 新增：建立訂單 (對接買家下單)
+  async appendOrder(d) {
+    const row = [
+      d.orderId || `ORD${Date.now()}`, d.buyerId, d.buyerName, 
+      d.productCode, d.productName, d.spec, d.qty, 
+      d.price, d.total, d.orderDate || new Date().toLocaleDateString('zh-TW'), d.status || '待點貨'
+    ];
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K',
+      valueInputOption: 'USER_ENTERED', resource: { values: [row] }
+    });
+  },
+
   async getBuyersByProduct(productCode) {
     const orders = await this.getOrders();
     return orders.filter(o => o.productCode === productCode && o.status !== '斷貨')
                  .map(o => ({ lineId: o.buyerId, buyerName: o.buyerName, qty: o.qty }));
   },
 
+  // 優化：支援買家修改數量 (Update Qty & Total)
   async updateOrderAndSplit(orderId, data) {
-    const { status, split, arrivalQty } = data;
-    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K' });
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:A' });
     const rows = res.data.values;
-    const rowIndex = rows.findIndex(r => r[0] === String(orderId));
-    if (rowIndex === -1) return;
+    const rowIndex = rows.findIndex(r => r[0] === String(orderId)) + 1;
+    if (rowIndex <= 1) return;
 
-    if (split) {
-      const originalRow = [...rows[rowIndex]];
-      const originalQty = parseInt(originalRow[6]);
-      const remainingQty = originalQty - arrivalQty;
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID, range: `Orders!G${rowIndex+1}:K${rowIndex+1}`,
-        valueInputOption: 'USER_ENTERED', 
-        resource: { values: [[arrivalQty, originalRow[7], originalRow[8], originalRow[9], '已到貨']] }
+    const updates = [];
+    if (data.status) updates.push({ range: `Orders!K${rowIndex}`, values: [[data.status]] });
+    if (data.qty) updates.push({ range: `Orders!G${rowIndex}`, values: [[data.qty]] });
+    if (data.total) updates.push({ range: `Orders!I${rowIndex}`, values: [[data.total]] });
+
+    if (updates.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: { data: updates, valueInputOption: 'USER_ENTERED' }
       });
+    }
+    
+    // 如果有拆單邏輯 (維持原本 split 功能)
+    if (data.split && data.arrivalQty) {
+      const allRows = (await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K' })).data.values;
+      const originalRow = allRows[rowIndex - 1];
+      const remainingQty = parseInt(originalRow[6]) - data.arrivalQty;
+      
+      // 更新原單為已到貨
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID, range: `Orders!G${rowIndex}:K${rowIndex}`,
+        valueInputOption: 'USER_ENTERED', 
+        resource: { values: [[data.arrivalQty, originalRow[7], (data.arrivalQty * originalRow[7]), originalRow[9], '已到貨']] }
+      });
+      
+      // 新增餘額單
       const newRow = [...originalRow];
       newRow[0] = `${orderId}-rem${Date.now().toString().slice(-3)}`;
       newRow[6] = remainingQty;
+      newRow[8] = remainingQty * originalRow[7];
       newRow[10] = '待點貨';
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K',
         valueInputOption: 'USER_ENTERED', resource: { values: [newRow] }
       });
-    } else {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID, range: `Orders!K${rowIndex+1}`,
-        valueInputOption: 'USER_ENTERED', resource: { values: [[status]] }
-      });
     }
   },
 
-  // --- 3. 廠商管理 (Vendor 表 A-H) ---
+  // --- 3. 廠商管理 ---
   async getVendorData() {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Vendor!A:H' });
     const rows = res.data.values;
@@ -129,7 +197,7 @@ export const sheetService = {
 
   async syncToVendor(productCode) {
     const ordersRes = await this.getOrders();
-    const targetOrders = ordersRes.filter(o => o.productCode === productCode);
+    const targetOrders = ordersRes.filter(o => o.productCode === productCode && o.status !== '買家取消');
     if (targetOrders.length === 0) return;
     const totalQty = targetOrders.reduce((sum, o) => sum + parseInt(o.qty), 0);
     const prodName = targetOrders[0].productName;
