@@ -1,70 +1,131 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8"><title>廠商管理</title>
+  <meta charset="UTF-8">
+  <title>商品管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; background: #f4f7f6; padding: 15px; }
-    .card { background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; float: right; }
-    .status-未到貨 { background: #ffeeba; color: #856404; }
-    .status-已到齊 { background: #d4edda; color: #155724; }
-    .btn-sync { background: #007bff; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; }
-    .vendor-item { border-bottom: 1px solid #eee; padding: 10px 0; }
+    body { font-family: sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
+    .nav-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .product-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .btn { flex: 1; min-width: 80px; padding: 10px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 13px; }
+    .btn-edit { background: #007bff; color: white; }
+    .btn-close { background: #6c757d; color: white; }
+    .btn-out { background: #dc3545; color: white; }
+    .btn-back { background: #6c757d; color: white; padding: 8px 12px; border-radius: 4px; text-decoration: none; font-size: 14px; }
+    #editModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; justify-content:center; align-items:center; }
+    .modal-content { background:white; padding:20px; border-radius:8px; width:90%; max-height:80vh; overflow-y:auto; }
+    label { font-weight: bold; display: block; margin-top: 10px; font-size: 14px; }
+    input { width:100%; padding:10px; margin-top:5px; border:1px solid #ddd; border-radius:4px; box-sizing:border-box; }
+    .status-badge { float: right; padding: 2px 8px; border-radius: 12px; font-size: 12px; background: #eee; }
   </style>
 </head>
 <body>
-  <h3>🏭 廠商採購管理</h3>
+  <div class="nav-bar">
+    <a href="liff-admin-dashboard.html" class="btn-back">⬅ 返回中心</a>
+    <h3 style="margin:0;">📦 商品管理</h3>
+    <button onclick="location.href='liff-admin-add-product.html'" style="background:#28a745; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">+ 新增</button>
+  </div>
   
-  <div class="card">
-    <h4>1. 結單標記轉登錄</h4>
-    <div id="closed-list">載入中...</div>
+  <div id="product-list">載入商品中...</div>
+
+  <div id="editModal">
+    <div class="modal-content">
+      <h3 style="margin-top:0;">修正商品資訊</h3>
+      <input type="hidden" id="editCode">
+      <label>商品名稱</label><input type="text" id="editName">
+      <label>單價</label><input type="number" id="editPrice">
+      <label>結單日</label><input type="date" id="editDate">
+      <label>YouTube 連結</label><input type="text" id="editYoutube">
+      <label>影音檔連結</label><input type="text" id="editVideo">
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button class="btn" onclick="closeModal()" style="background:#eee; color:#333;">取消</button>
+        <button class="btn" onclick="saveEdit()" style="background:#00c300; color:white;">儲存更新</button>
+      </div>
+    </div>
   </div>
 
-  <div class="card">
-    <h4>2. 採購清單查詢</h4>
-    <div id="vendor-list">載入中...</div>
-  </div>
+<script>
+let products = [];
+async function init() {
+  try {
+    await liff.init({ liffId: "2008857998-AoqmEajq" });
+    fetchData();
+  } catch (err) { console.error("LIFF Init failed", err); }
+}
 
-  <script>
-    async function init() {
-      await liff.init({ liffId: "2008857998-qOI2DqCC" }); // 請替換
-      loadData();
-    }
+async function fetchData() {
+  const res = await fetch("/api/products");
+  products = await res.json();
+  const list = document.getElementById("product-list");
+  list.innerHTML = products.map(p => `
+    <div class="product-card">
+      <span class="status-badge">${p.status}</span>
+      <strong>${p.productName}</strong><br>
+      <small>代碼: ${p.productCode} | 價格: ${p.price}</small>
+      <div class="actions">
+        <button class="btn btn-edit" onclick="openEdit('${p.productCode}')">修正</button>
+        ${p.status === '上架' ? `<button class="btn btn-close" onclick="updateStatus('${p.productCode}', '已結單')">結單</button>` : ''}
+        ${p.status !== '斷貨' ? `<button class="btn btn-out" onclick="markOutOfStock('${p.productCode}', '${p.productName}')">斷貨通知</button>` : ''}
+      </div>
+    </div>
+  `).join("");
+}
 
-    async function loadData() {
-      // 讀取已結單商品
-      const prodRes = await fetch("/api/admin/products?filter=closed");
-      const closedProds = await prodRes.json();
-      document.getElementById("closed-list").innerHTML = closedProds.map(p => `
-        <div class="vendor-item">
-          <span>${p.productName} (${p.productCode})</span>
-          <button class="btn-sync" onclick="syncToVendor('${p.productCode}')">登錄至廠商清單</button>
-        </div>
-      `).join("") || "尚無已結單商品";
+async function markOutOfStock(code, name) {
+  if(!confirm(`警告：將「${name}」標記為斷貨會自動通知所有買家！確定執行？`)) return;
+  const res = await fetch('/api/admin/products/out-of-stock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productCode: code, productName: name })
+  });
+  if(res.ok) {
+    const r = await res.json();
+    alert(r.message);
+    fetchData();
+  }
+}
 
-      // 讀取廠商清單
-      const ventRes = await fetch("/api/admin/vendor");
-      const vendorData = await ventRes.json();
-      document.getElementById("vendor-list").innerHTML = vendorData.map(v => `
-        <div class="vendor-item">
-          <span class="status-badge status-${v.status}">${v.status}</span>
-          <strong>${v.name}</strong><br>
-          <small>採購數: ${v.targetQty} | 到貨數: ${v.arrivedQty}</small><br>
-          <small>訂購日: ${v.orderDate} | 匯款日: ${v.payDate || '未填'}</small>
-        </div>
-      `).join("") || "清單空空如也";
-    }
+async function updateStatus(code, status) {
+  if(!confirm(`確定將狀態改為「${status}」？`)) return;
+  // 此處調用簡單的狀態更新 API (可共用現有的 update 邏輯)
+  fetchData();
+}
 
-    async function syncToVendor(code) {
-      if(!confirm("確定要將此商品轉入廠商採購單嗎？")) return;
-      await fetch(`/api/admin/vendor/sync/${code}`, { method: 'POST' });
-      alert("登錄成功！");
-      loadData();
-    }
+function openEdit(code) {
+  const p = products.find(i => i.productCode === code);
+  document.getElementById("editCode").value = p.productCode;
+  document.getElementById("editName").value = p.productName;
+  document.getElementById("editPrice").value = p.price;
+  document.getElementById("editDate").value = p.closeDate;
+  document.getElementById("editYoutube").value = p.youtube || "";
+  document.getElementById("editVideo").value = p.video || "";
+  document.getElementById("editModal").style.display = "flex";
+}
 
-    window.onload = init;
-  </script>
+function closeModal() { document.getElementById("editModal").style.display = "none"; }
+
+async function saveEdit() {
+  const code = document.getElementById("editCode").value;
+  const payload = {
+    productName: document.getElementById("editName").value,
+    price: document.getElementById("editPrice").value,
+    closeDate: document.getElementById("editDate").value,
+    youtube: document.getElementById("editYoutube").value,
+    video: document.getElementById("editVideo").value
+  };
+  await fetch("/api/products/" + code, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  closeModal();
+  fetchData();
+}
+
+window.onload = init;
+</script>
 </body>
 </html>

@@ -14,7 +14,6 @@ export const sheetService = {
   // 1️⃣ 商品管理 (Products 表)
   // ==========================================
 
-  // 讀取商品，支援過濾狀態
   async getProducts(filter = 'all') {
     try {
       const res = await sheets.spreadsheets.values.get({ 
@@ -51,13 +50,9 @@ export const sheetService = {
     } catch (e) { console.error(e); return []; }
   },
 
-  // 新增商品 (含自動產生 ID 防呆)
   async appendProduct(d) {
-    // 🔒 系統自動產生 ID: P + 當前時間戳後 8 碼
     const generatedCode = d.productCode || `P${Date.now().toString().slice(-8)}`;
     const specs = `規格:${d.colorMap || '無'} | 尺寸:${d.sizeMap || '無'}`;
-    
-    // 對齊 Products A-N 欄位
     const row = [
       generatedCode, d.productName, specs, d.price, '上架', 
       d.closeDate, d.isStock || 'FALSE', d.cost, d.images, d.youtube, 
@@ -73,13 +68,11 @@ export const sheetService = {
     return generatedCode;
   },
 
-  // 修改商品狀態 (結單標記 / 斷貨標記)
   async updateProductStatus(code, newStatus) {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Products!A:A' });
     const idx = res.data.values.findIndex(r => r[0] === code) + 1;
     if (idx <= 0) return;
     
-    // 更新 E 欄 (狀態)
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
       range: `Products!E${idx}`,
@@ -111,13 +104,23 @@ export const sheetService = {
           price: get('price'),
           total: get('total'),
           date: get('order_date'),
-          status: get('status') // 待點貨 / 已到貨 / 斷貨
+          status: get('status')
         };
       });
     } catch (e) { return []; }
   },
 
-  // 部分到貨拆單邏輯
+  // 用於斷貨通知抓取名單
+  async getBuyersByProduct(productCode) {
+    const orders = await this.getOrders();
+    return orders.filter(o => o.productCode === productCode && o.status !== '斷貨')
+                 .map(o => ({
+                   lineId: o.buyerId,
+                   buyerName: o.buyerName,
+                   qty: o.qty
+                 }));
+  },
+
   async updateOrderAndSplit(orderId, data) {
     const { status, split, arrivalQty } = data;
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K' });
@@ -127,18 +130,16 @@ export const sheetService = {
 
     if (split) {
       const originalRow = [...rows[rowIndex]];
-      const originalQty = parseInt(originalRow[6]); // G 欄 qty
+      const originalQty = parseInt(originalRow[6]);
       const remainingQty = originalQty - arrivalQty;
 
-      // 1. 修改原單為「已到貨」且數量更新為本次到貨數
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `Orders!G${rowIndex+1}:K${rowIndex+1}`, // 更新 G 到 K 欄位
+        range: `Orders!G${rowIndex+1}:K${rowIndex+1}`,
         valueInputOption: 'USER_ENTERED', 
         resource: { values: [[arrivalQty, originalRow[7], originalRow[8], originalRow[9], '已到貨']] }
       });
 
-      // 2. 自動新增一行剩餘數量的「待點貨」單，實現下次點貨 
       const newRow = [...originalRow];
       newRow[0] = `${orderId}-rem${Date.now().toString().slice(-3)}`;
       newRow[6] = remainingQty;
@@ -151,7 +152,6 @@ export const sheetService = {
         resource: { values: [newRow] }
       });
     } else {
-      // 一般齊全到貨更新
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: `Orders!K${rowIndex+1}`,
@@ -180,12 +180,11 @@ export const sheetService = {
         arrivedQty: get('實際到貨數'),
         orderDate: get('訂購日期'),
         payDate: get('匯款日期'),
-        status: get('到貨狀態') // 未到貨 / 部分到貨 / 已到齊 / 缺貨
+        status: get('到貨狀態')
       };
     });
   },
 
-  // 將結單商品與買家訂單總量同步到廠商清單
   async syncToVendor(productCode) {
     const ordersRes = await this.getOrders();
     const targetOrders = ordersRes.filter(o => o.productCode === productCode);
@@ -194,16 +193,9 @@ export const sheetService = {
     const totalQty = targetOrders.reduce((sum, o) => sum + parseInt(o.qty), 0);
     const prodName = targetOrders[0].productName;
     
-    // A:代碼, B:名稱, C:規格, D:總數, E:到貨數, F:訂購日, G:匯款日, H:狀態
     const row = [
-      productCode, 
-      prodName, 
-      '依訂單彙整', 
-      totalQty, 
-      0, 
-      new Date().toLocaleDateString('zh-TW'), 
-      '', 
-      '未到貨'
+      productCode, prodName, '依訂單彙整', totalQty, 0, 
+      new Date().toLocaleDateString('zh-TW'), '', '未到貨'
     ];
 
     await sheets.spreadsheets.values.append({
