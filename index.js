@@ -3,7 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import sheetService from "./services/sheetService.js";
-import { client } from "./services/lineService.js";
+import { client } from "./services/lineClient.js";
 
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
