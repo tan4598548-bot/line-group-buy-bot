@@ -5,30 +5,66 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 15px; background: #f9f9f9; }
-    .vendor-card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #ff9500; }
+    body { font-family: sans-serif; background: #f4f7f6; padding: 15px; }
+    .card { background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; float: right; }
+    .status-未到貨 { background: #ffeeba; color: #856404; }
+    .status-已到齊 { background: #d4edda; color: #155724; }
+    .btn-sync { background: #007bff; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; }
+    .vendor-item { border-bottom: 1px solid #eee; padding: 10px 0; }
   </style>
 </head>
 <body>
-  <div class="nav"><a href="liff-admin-dashboard.html" style="text-decoration:none; font-weight:bold;">❮ 返回</a></div>
-  <h3>🏢 廠商採購統計</h3>
-  <div id="vendorSummary"></div>
+  <h3>🏭 廠商採購管理</h3>
+  
+  <div class="card">
+    <h4>1. 結單標記轉登錄</h4>
+    <div id="closed-list">載入中...</div>
+  </div>
 
-<script>
-async function init() {
-  await liff.init({ liffId: "2008857998-481MeChx" });
-  const p = await liff.getProfile();
-  const res = await fetch("/api/admin/vendor-orders", { headers: { "x-liff-user-id": p.userId } });
-  const data = await res.json();
-  document.getElementById("vendorSummary").innerHTML = data.map(d => `
-    <div class="vendor-card">
-      <strong>${d.product_name}</strong><br>
-      總訂購量: ${d.total_ordered} | 成本單價: $${d.cost}<br>
-      <small style="color:#666;">廠商備註: ${d.vendor_note || '無'}</small>
-    </div>
-  `).join("");
-}
-init();
-</script>
+  <div class="card">
+    <h4>2. 採購清單查詢</h4>
+    <div id="vendor-list">載入中...</div>
+  </div>
+
+  <script>
+    async function init() {
+      await liff.init({ liffId: "YOUR_LIFF_ID" }); // 請替換
+      loadData();
+    }
+
+    async function loadData() {
+      // 讀取已結單商品
+      const prodRes = await fetch("/api/admin/products?filter=closed");
+      const closedProds = await prodRes.json();
+      document.getElementById("closed-list").innerHTML = closedProds.map(p => `
+        <div class="vendor-item">
+          <span>${p.productName} (${p.productCode})</span>
+          <button class="btn-sync" onclick="syncToVendor('${p.productCode}')">登錄至廠商清單</button>
+        </div>
+      `).join("") || "尚無已結單商品";
+
+      // 讀取廠商清單
+      const ventRes = await fetch("/api/admin/vendor");
+      const vendorData = await ventRes.json();
+      document.getElementById("vendor-list").innerHTML = vendorData.map(v => `
+        <div class="vendor-item">
+          <span class="status-badge status-${v.status}">${v.status}</span>
+          <strong>${v.name}</strong><br>
+          <small>採購數: ${v.targetQty} | 到貨數: ${v.arrivedQty}</small><br>
+          <small>訂購日: ${v.orderDate} | 匯款日: ${v.payDate || '未填'}</small>
+        </div>
+      `).join("") || "清單空空如也";
+    }
+
+    async function syncToVendor(code) {
+      if(!confirm("確定要將此商品轉入廠商採購單嗎？")) return;
+      await fetch(`/api/admin/vendor/sync/${code}`, { method: 'POST' });
+      alert("登錄成功！");
+      loadData();
+    }
+
+    window.onload = init;
+  </script>
 </body>
 </html>

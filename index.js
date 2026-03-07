@@ -12,6 +12,26 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+// 取得廠商清單
+app.get('/api/admin/vendor', async (req, res) => {
+  const data = await sheetService.getVendorData();
+  res.json(data);
+});
+
+// 將結單商品同步至廠商清單
+app.post('/api/admin/vendor/sync/:code', async (req, res) => {
+  await sheetService.syncToVendor(req.params.code);
+  res.sendStatus(200);
+});
+
+// 斷貨處理 API
+app.post('/api/admin/products/out-of-stock', async (req, res) => {
+  const { productCode, isClosed } = req.body;
+  await sheetService.handleOutOfStock(productCode, isClosed);
+  // 此處建議串接 LINE Notify 通知買家
+  res.sendStatus(200);
+});
+
 // --- 商品管理 API ---
 app.get("/api/products", async (req, res) => {
   try { res.json(await sheetService.getProducts()); } catch (e) { res.status(500).json({ error: e.message }); }
