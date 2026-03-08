@@ -5,15 +5,12 @@ const LINE_API = "https://api.line.me/v2/bot/message/push";
 
 /**
  * 核心 LINE 傳送實例
+ * 提供 pushMessage 方法以供 index.js 調用
  */
 export const client = {
-  /**
-   * 傳送訊息 (相容於官方 SDK 語法)
-   * @param {string} to - LINE User ID
-   * @param {object|string} message - 訊息物件或純文字
-   */
   async pushMessage(to, message) {
     try {
+      // 支援傳入純文字字串或 LINE 訊息物件陣列
       const messages = typeof message === 'string' 
         ? [{ type: "text", text: message }] 
         : (Array.isArray(message) ? message : [message]);
@@ -28,7 +25,7 @@ export const client = {
           }
         }
       );
-      console.log(`✅ LINE 訊息已傳送至: ${to}`);
+      console.log(`✅ LINE 訊息傳送成功 -> User: ${to}`);
     } catch (e) {
       console.error("❌ LINE Push 失敗:", e.response?.data || e.message);
       throw e;

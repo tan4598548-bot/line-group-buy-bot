@@ -1,78 +1,134 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <title>團購商城 - 首頁</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <style>
-    :root { --primary-color: #06c755; --price-color: #e44d26; --bg: #f5f5f5; }
-    body { font-family: -apple-system, sans-serif; background: var(--bg); margin: 0; padding-bottom: 70px; }
-    
-    .header { background: white; padding: 15px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { margin: 0; font-size: 18px; color: #333; }
-    
-    .product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; }
-    .product-card { background: white; border-radius: 12px; overflow: hidden; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.05); transition: 0.2s; }
-    .product-card:active { transform: scale(0.98); }
-    .product-img { width: 100%; aspect-ratio: 1/1; object-fit: cover; background: #eee; }
-    .product-info { padding: 10px; }
-    .product-name { font-size: 14px; color: #333; font-weight: 500; height: 40px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-    .product-price { color: var(--price-color); font-size: 16px; font-weight: bold; margin-top: 5px; }
-    .product-price::before { content: '$'; font-size: 12px; margin-right: 2px; }
-    
-    .badge { position: absolute; top: 8px; left: 8px; padding: 2px 8px; border-radius: 6px; font-size: 10px; color: white; font-weight: bold; z-index: 1; }
-    .status-active { background: var(--primary-color); }
-    .status-closed { background: #999; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商品下單</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 15px; background: #f8f9fa; }
+        .container { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .prod-title { font-size: 20px; font-weight: bold; margin-bottom: 10px; color: #333; }
+        .price { color: #e44d26; font-size: 24px; font-weight: bold; margin-bottom: 20px; }
+        .form-item { margin-bottom: 15px; }
+        label { display: block; font-size: 14px; color: #666; margin-bottom: 5px; }
+        select, input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; outline: none; }
+        button { width: 100%; padding: 15px; background: #00b900; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .hint { font-size: 12px; color: #999; margin-top: 5px; }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <div id="prodName" class="prod-title">載入中...</div>
+        <div class="price">$<span id="prodPrice">0</span></div>
 
-  <div class="header">
-    <h1>🛒 團購現貨/預購</h1>
-    <a href="liff-buyer-orders.html" style="color:var(--primary-color); text-decoration:none; font-size:14px; font-weight:bold;">我的訂單</a>
-  </div>
+        <div class="form-item">
+            <label>選擇顏色</label>
+            <select id="colorSelect" onchange="checkStatus()">
+                <option value="">-- 請選擇顏色 --</option>
+            </select>
+        </div>
 
-  <div id="product-list" class="product-grid">
-    <div style="grid-column: span 2; text-align: center; padding: 50px; color: #999;">商品加載中...</div>
-  </div>
+        <div class="form-item">
+            <label>選擇尺寸</label>
+            <select id="sizeSelect" onchange="checkStatus()">
+                <option value="">-- 請選擇尺寸 --</option>
+            </select>
+        </div>
 
-  <script>
-    async function init() {
-      // 使用您原本的 LIFF ID: 2008857998-imqg5sNq
-      await liff.init({ liffId: "2008857998-imqg5sNq" });
-      if (!liff.isLoggedIn()) { liff.login(); return; }
-      loadProducts();
-    }
+        <div class="form-item">
+            <label>購買數量</label>
+            <input type="number" id="qtyInput" value="1" min="1" oninput="checkStatus()">
+        </div>
 
-    async function loadProducts() {
-      try {
-        const res = await fetch("/api/products");
-        const products = await res.json();
-        const list = document.getElementById("product-list");
+        <button id="orderBtn" disabled onclick="handleOrder()">確認下單</button>
+        <p class="hint">＊請務必選擇顏色與尺寸</p>
+    </div>
 
-        list.innerHTML = products.map(p => {
-          const isClosed = p.status === '已結單';
-          const firstImg = p.images ? p.images.split(',')[0].trim() : 'https://via.placeholder.com/300';
-          
-          return `
-            <div class="product-card" onclick="location.href='product-detail.html?code=${p.productCode}'">
-              <span class="badge ${isClosed ? 'status-closed' : 'status-active'}">
-                ${isClosed ? '已結單' : (p.isStock === 'TRUE' ? '🚚 現貨' : '⌛ 預購')}
-              </span>
-              <img class="product-img" src="${firstImg}">
-              <div class="product-info">
-                <div class="product-name">${p.productName}</div>
-                <div class="product-price">${p.price}</div>
-              </div>
-            </div>
-          `;
-        }).join("");
-      } catch (err) {
-        document.getElementById("product-list").innerHTML = "載入失敗，請稍後再試";
-      }
-    }
-    window.onload = init;
-  </script>
+    <script>
+        let currentProduct = null;
+        let userProfile = null;
+
+        async function init() {
+            try {
+                await liff.init({ liffId: "2008857998-imqg5sNq" });
+                if (!liff.isLoggedIn()) { liff.login(); return; }
+                userProfile = await liff.getProfile();
+
+                const params = new URLSearchParams(window.location.search);
+                const code = params.get('code');
+
+                const res = await fetch(`/api/products`);
+                const products = await res.json();
+                currentProduct = products.find(p => p.productCode === code);
+
+                if (currentProduct) {
+                    renderProduct();
+                }
+            } catch (err) { console.error("初始化失敗", err); }
+        }
+
+        function renderProduct() {
+            document.getElementById('prodName').innerText = currentProduct.productName;
+            document.getElementById('prodPrice').innerText = currentProduct.price;
+
+            // 解析規格字串範例: "顏色:紅,藍 | 尺寸:S,M" 或 "紅,藍 | S,M"
+            const specParts = currentProduct.specSize.split('|');
+            
+            if (specParts[0]) {
+                const colors = specParts[0].replace('規格:', '').replace('顏色:', '').split(',');
+                colors.forEach(c => {
+                    if(c.trim()) document.getElementById('colorSelect').add(new Option(c.trim(), c.trim()));
+                });
+            }
+            if (specParts[1]) {
+                const sizes = specParts[1].replace('尺寸:', '').split(',');
+                sizes.forEach(s => {
+                    if(s.trim()) document.getElementById('sizeSelect').add(new Option(s.trim(), s.trim()));
+                });
+            }
+        }
+
+        function checkStatus() {
+            const color = document.getElementById('colorSelect').value;
+            const size = document.getElementById('sizeSelect').value;
+            const qty = document.getElementById('qtyInput').value;
+            // 必須兩者都選且數量大於0
+            document.getElementById('orderBtn').disabled = !(color && size && qty > 0);
+        }
+
+        async function handleOrder() {
+            const color = document.getElementById('colorSelect').value;
+            const size = document.getElementById('sizeSelect').value;
+            const qty = parseInt(document.getElementById('qtyInput').value);
+
+            const payload = {
+                buyerId: userProfile.userId,
+                buyerName: userProfile.displayName,
+                productCode: currentProduct.productCode,
+                productName: currentProduct.productName,
+                spec: `顏色:${color} | 尺寸:${size}`,
+                qty: qty,
+                price: currentProduct.price,
+                total: currentProduct.price * qty
+            };
+
+            const response = await fetch('/api/admin/orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                alert("下單成功！將為您關閉視窗");
+                liff.closeWindow();
+            } else {
+                alert("下單失敗，請稍後再試");
+            }
+        }
+
+        init();
+    </script>
 </body>
 </html>

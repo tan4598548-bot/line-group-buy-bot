@@ -1,12 +1,18 @@
 import { google } from 'googleapis';
 
+const serviceAccountRaw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+
+if (!serviceAccountRaw || !SPREADSHEET_ID) {
+  throw new Error("❌ 環境變數缺失: GOOGLE_SERVICE_ACCOUNT_JSON 或 SPREADSHEET_ID");
+}
+
 const auth = new google.auth.GoogleAuth({
-  credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON),
+  credentials: JSON.parse(serviceAccountRaw),
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
 const sheets = google.sheets({ version: 'v4', auth });
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
 export const sheetService = {
 
@@ -35,66 +41,33 @@ export const sheetService = {
 
   async appendProduct(d) {
     const generatedCode = d.productCode || `P${Date.now().toString().slice(-8)}`;
-    // 優化：規格儲存邏輯，若已有 specSize 則直接使用
     const specs = d.specSize || `規格:${d.colorMap || '無'} | 尺寸:${d.sizeMap || '無'}`;
-    const row = [
-      generatedCode, d.productName, specs, d.price, '上架', 
-      d.closeDate, d.isStock || 'FALSE', d.cost || 0, d.images, 
-      d.youtube, d.video, d.type, d.stock || 0, d.description
-    ];
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID, range: 'Products!A:N',
-      valueInputOption: 'USER_ENTERED', resource: { values: [row] }
-    });
+    const row = [generatedCode, d.productName, specs, d.price, '上架', d.closeDate, d.isStock || 'FALSE', d.cost || 0, d.images, d.youtube, d.video, d.type, d.stock || 0, d.description];
+    await sheets.spreadsheets.values.append({ spreadsheetId: SPREADSHEET_ID, range: 'Products!A:N', valueInputOption: 'USER_ENTERED', resource: { values: [row] } });
     return generatedCode;
   },
 
-  // 新增：更新商品詳細資訊 (對接管理端編輯)
   async updateProduct(code, data) {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Products!A:A' });
     const idx = res.data.values.findIndex(r => r[0] === code) + 1;
     if (idx <= 1) throw new Error("找不到該商品代碼");
-
-    // 取得標題列以確定欄位索引
     const headerRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Products!1:1' });
     const headers = headerRes.data.values[0];
-
     const updates = [];
-    const fieldMap = {
-      productName: '商品名稱', price: '單價', status: '狀態',
-      specSize: '規格尺寸', description: '說明', images: '圖片',
-      isStock: '是否現貨', type: '類型', cost: '成本'
-    };
-
+    const fieldMap = { productName: '商品名稱', price: '單價', status: '狀態', specSize: '規格尺寸', description: '說明', images: '圖片', isStock: '是否現貨', type: '類型', cost: '成本' };
     for (const [key, value] of Object.entries(data)) {
       if (fieldMap[key]) {
         const colIdx = headers.indexOf(fieldMap[key]);
         if (colIdx !== -1) {
-          const colLetter = String.fromCharCode(65 + colIdx);
-          updates.push({
-            range: `Products!${colLetter}${idx}`,
-            values: [[value]]
-          });
+          updates.push({ range: `Products!${String.fromCharCode(65 + colIdx)}${idx}`, values: [[value]] });
         }
       }
     }
-
-    if (updates.length > 0) {
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
-        resource: { data: updates, valueInputOption: 'USER_ENTERED' }
-      });
-    }
+    if (updates.length > 0) { await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: SPREADSHEET_ID, resource: { data: updates, valueInputOption: 'USER_ENTERED' } }); }
   },
 
-  async updateProductStatus(code, newStatus) {
-    return this.updateProduct(code, { status: newStatus });
-  },
-
-  // 新增：刪除商品 (實作為將狀態改為「已刪除」或標記)
-  async deleteProduct(code) {
-    return this.updateProduct(code, { status: '已下架/刪除' });
-  },
+  async updateProductStatus(code, newStatus) { return this.updateProduct(code, { status: newStatus }); },
+  async deleteProduct(code) { return this.updateProduct(code, { status: '已下架/刪除' }); },
 
   // --- 2. 訂單與發貨 (Orders 表 A-K) ---
   async getOrders() {
@@ -105,77 +78,43 @@ export const sheetService = {
       const headers = rows[0];
       return rows.slice(1).map(row => {
         const get = (n) => row[headers.indexOf(n)] || '';
-        return { 
-          orderId: get('order_ID'), buyerId: get('buyer_ID'), buyerName: get('buyer_name'),
-          productCode: get('product_code'), productName: get('product_name'),
-          spec: get('spec'), qty: get('qty'), price: get('price'),
-          total: get('total'), date: get('order_date'), status: get('status') 
-        };
+        return { orderId: get('order_ID'), buyerId: get('buyer_ID'), buyerName: get('buyer_name'), productCode: get('product_code'), productName: get('product_name'), spec: get('spec'), qty: get('qty'), price: get('price'), total: get('total'), date: get('order_date'), status: get('status') };
       });
     } catch (e) { return []; }
   },
 
-  // 新增：建立訂單 (對接買家下單)
   async appendOrder(d) {
-    const row = [
-      d.orderId || `ORD${Date.now()}`, d.buyerId, d.buyerName, 
-      d.productCode, d.productName, d.spec, d.qty, 
-      d.price, d.total, d.orderDate || new Date().toLocaleDateString('zh-TW'), d.status || '待點貨'
-    ];
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K',
-      valueInputOption: 'USER_ENTERED', resource: { values: [row] }
-    });
+    const row = [d.orderId, d.buyerId, d.buyerName, d.productCode, d.productName, d.spec, d.qty, d.price, d.total, d.orderDate, d.status];
+    await sheets.spreadsheets.values.append({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K', valueInputOption: 'USER_ENTERED', resource: { values: [row] } });
   },
 
   async getBuyersByProduct(productCode) {
     const orders = await this.getOrders();
-    return orders.filter(o => o.productCode === productCode && o.status !== '斷貨')
+    return orders.filter(o => o.productCode === productCode && o.status !== '斷貨' && o.status !== '買家取消')
                  .map(o => ({ lineId: o.buyerId, buyerName: o.buyerName, qty: o.qty }));
   },
 
-  // 優化：支援買家修改數量 (Update Qty & Total)
   async updateOrderAndSplit(orderId, data) {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:A' });
-    const rows = res.data.values;
-    const rowIndex = rows.findIndex(r => r[0] === String(orderId)) + 1;
+    const rowIndex = res.data.values.findIndex(r => r[0] === String(orderId)) + 1;
     if (rowIndex <= 1) return;
-
     const updates = [];
     if (data.status) updates.push({ range: `Orders!K${rowIndex}`, values: [[data.status]] });
     if (data.qty) updates.push({ range: `Orders!G${rowIndex}`, values: [[data.qty]] });
     if (data.total) updates.push({ range: `Orders!I${rowIndex}`, values: [[data.total]] });
-
-    if (updates.length > 0) {
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
-        resource: { data: updates, valueInputOption: 'USER_ENTERED' }
-      });
-    }
+    if (updates.length > 0) { await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: SPREADSHEET_ID, resource: { data: updates, valueInputOption: 'USER_ENTERED' } }); }
     
-    // 如果有拆單邏輯 (維持原本 split 功能)
     if (data.split && data.arrivalQty) {
       const allRows = (await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K' })).data.values;
       const originalRow = allRows[rowIndex - 1];
       const remainingQty = parseInt(originalRow[6]) - data.arrivalQty;
-      
-      // 更新原單為已到貨
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID, range: `Orders!G${rowIndex}:K${rowIndex}`,
-        valueInputOption: 'USER_ENTERED', 
-        resource: { values: [[data.arrivalQty, originalRow[7], (data.arrivalQty * originalRow[7]), originalRow[9], '已到貨']] }
-      });
-      
-      // 新增餘額單
+      await sheets.spreadsheets.values.update({ spreadsheetId: SPREADSHEET_ID, range: `Orders!G${rowIndex}:K${rowIndex}`, valueInputOption: 'USER_ENTERED', resource: { values: [[data.arrivalQty, originalRow[7], (data.arrivalQty * originalRow[7]), originalRow[9], '已到貨']] } });
       const newRow = [...originalRow];
       newRow[0] = `${orderId}-rem${Date.now().toString().slice(-3)}`;
       newRow[6] = remainingQty;
       newRow[8] = remainingQty * originalRow[7];
       newRow[10] = '待點貨';
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K',
-        valueInputOption: 'USER_ENTERED', resource: { values: [newRow] }
-      });
+      await sheets.spreadsheets.values.append({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K', valueInputOption: 'USER_ENTERED', resource: { values: [newRow] } });
     }
   },
 
@@ -187,11 +126,7 @@ export const sheetService = {
     const headers = rows[0];
     return rows.slice(1).map(row => {
       const get = (n) => row[headers.indexOf(n)] || '';
-      return {
-        code: get('商品代碼'), name: get('商品名稱'), spec: get('採購規格'),
-        targetQty: get('採購總數'), arrivedQty: get('實際到貨數'),
-        orderDate: get('訂購日期'), payDate: get('匯款日期'), status: get('到貨狀態')
-      };
+      return { code: get('商品代碼'), name: get('商品名稱'), spec: get('採購規格'), targetQty: get('採購總數'), arrivedQty: get('實際到貨數'), orderDate: get('訂購日期'), payDate: get('匯款日期'), status: get('到貨狀態') };
     });
   },
 
@@ -200,12 +135,8 @@ export const sheetService = {
     const targetOrders = ordersRes.filter(o => o.productCode === productCode && o.status !== '買家取消');
     if (targetOrders.length === 0) return;
     const totalQty = targetOrders.reduce((sum, o) => sum + parseInt(o.qty), 0);
-    const prodName = targetOrders[0].productName;
-    const row = [productCode, prodName, '依訂單彙整', totalQty, 0, new Date().toLocaleDateString('zh-TW'), '', '未到貨'];
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID, range: 'Vendor!A:H',
-      valueInputOption: 'USER_ENTERED', resource: { values: [row] }
-    });
+    const row = [productCode, targetOrders[0].productName, '依訂單彙整', totalQty, 0, new Date().toLocaleDateString('zh-TW'), '', '未到貨'];
+    await sheets.spreadsheets.values.append({ spreadsheetId: SPREADSHEET_ID, range: 'Vendor!A:H', valueInputOption: 'USER_ENTERED', resource: { values: [row] } });
   }
 };
 export default sheetService;
