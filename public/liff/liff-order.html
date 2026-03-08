@@ -22,87 +22,60 @@
     <div class="container">
         <div id="prodName" class="prod-title">載入中...</div>
         <div class="price">$<span id="prodPrice">0</span></div>
-
         <div class="form-item">
             <label>選擇顏色</label>
-            <select id="colorSelect" onchange="checkStatus()">
-                <option value="">-- 請選擇顏色 --</option>
-            </select>
+            <select id="colorSelect" onchange="checkStatus()"><option value="">-- 請選擇顏色 --</option></select>
         </div>
-
         <div class="form-item">
             <label>選擇尺寸</label>
-            <select id="sizeSelect" onchange="checkStatus()">
-                <option value="">-- 請選擇尺寸 --</option>
-            </select>
+            <select id="sizeSelect" onchange="checkStatus()"><option value="">-- 請選擇尺寸 --</option></select>
         </div>
-
         <div class="form-item">
             <label>購買數量</label>
             <input type="number" id="qtyInput" value="1" min="1" oninput="checkStatus()">
         </div>
-
         <button id="orderBtn" disabled onclick="handleOrder()">確認下單</button>
         <p class="hint">＊請務必選擇顏色與尺寸</p>
     </div>
-
     <script>
         let currentProduct = null;
         let userProfile = null;
-
         async function init() {
             try {
                 await liff.init({ liffId: "2008857998-imqg5sNq" });
                 if (!liff.isLoggedIn()) { liff.login(); return; }
                 userProfile = await liff.getProfile();
-
                 const params = new URLSearchParams(window.location.search);
                 const code = params.get('code');
-
                 const res = await fetch(`/api/products`);
                 const products = await res.json();
                 currentProduct = products.find(p => p.productCode === code);
-
-                if (currentProduct) {
-                    renderProduct();
-                }
+                if (currentProduct) renderProduct();
             } catch (err) { console.error("初始化失敗", err); }
         }
-
         function renderProduct() {
             document.getElementById('prodName').innerText = currentProduct.productName;
             document.getElementById('prodPrice').innerText = currentProduct.price;
-
-            // 解析規格字串範例: "顏色:紅,藍 | 尺寸:S,M" 或 "紅,藍 | S,M"
             const specParts = currentProduct.specSize.split('|');
-            
             if (specParts[0]) {
-                const colors = specParts[0].replace('規格:', '').replace('顏色:', '').split(',');
-                colors.forEach(c => {
-                    if(c.trim()) document.getElementById('colorSelect').add(new Option(c.trim(), c.trim()));
-                });
+                const colors = specParts[0].replace('規格:', '').replace('顏色:', '').trim().split(',');
+                colors.forEach(c => { if(c.trim()) document.getElementById('colorSelect').add(new Option(c.trim(), c.trim())); });
             }
             if (specParts[1]) {
-                const sizes = specParts[1].replace('尺寸:', '').split(',');
-                sizes.forEach(s => {
-                    if(s.trim()) document.getElementById('sizeSelect').add(new Option(s.trim(), s.trim()));
-                });
+                const sizes = specParts[1].replace('尺寸:', '').trim().split(',');
+                sizes.forEach(s => { if(s.trim()) document.getElementById('sizeSelect').add(new Option(s.trim(), s.trim())); });
             }
         }
-
         function checkStatus() {
             const color = document.getElementById('colorSelect').value;
             const size = document.getElementById('sizeSelect').value;
             const qty = document.getElementById('qtyInput').value;
-            // 必須兩者都選且數量大於0
             document.getElementById('orderBtn').disabled = !(color && size && qty > 0);
         }
-
         async function handleOrder() {
             const color = document.getElementById('colorSelect').value;
             const size = document.getElementById('sizeSelect').value;
             const qty = parseInt(document.getElementById('qtyInput').value);
-
             const payload = {
                 buyerId: userProfile.userId,
                 buyerName: userProfile.displayName,
@@ -111,23 +84,18 @@
                 spec: `顏色:${color} | 尺寸:${size}`,
                 qty: qty,
                 price: currentProduct.price,
-                total: currentProduct.price * qty
+                total: currentProduct.price * qty,
+                orderDate: new Date().toLocaleDateString('zh-TW'),
+                status: '待點貨'
             };
-
             const response = await fetch('/api/admin/orders', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-
-            if (response.ok) {
-                alert("下單成功！將為您關閉視窗");
-                liff.closeWindow();
-            } else {
-                alert("下單失敗，請稍後再試");
-            }
+            if (response.ok) { alert("下單成功！將為您關閉視窗"); liff.closeWindow(); }
+            else { alert("下單失敗，請稍後再試"); }
         }
-
         init();
     </script>
 </body>
