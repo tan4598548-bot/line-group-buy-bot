@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>商品詳情</title>
+    <title>商品下單詳情</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         :root { --primary-color: #06c755; --price-color: #e44d26; }
@@ -19,8 +19,8 @@
         .section-title { font-size: 14px; font-weight: bold; color: #666; margin-top: 25px; border-left: 4px solid var(--primary-color); padding-left: 8px; }
         .description-box { font-size: 15px; color: #444; margin-top: 10px; white-space: pre-line; line-height: 1.6; }
         .selector-box { background: #f9f9f9; padding: 15px; border-radius: 12px; margin-top: 20px; border: 1px solid #f0f0f0; }
-        .spec-label { font-size: 13px; color: #888; margin-bottom: 8px; display: block; }
-        select, input { width: 100%; height: 48px; border: 1px solid #ddd; border-radius: 8px; padding: 0 12px; margin-bottom: 12px; font-size: 16px; box-sizing: border-box; }
+        .spec-label { font-size: 13px; color: #888; margin-bottom: 8px; display: block; font-weight: bold; }
+        select, input { width: 100%; height: 48px; border: 1px solid #ddd; border-radius: 8px; padding: 0 12px; margin-bottom: 15px; font-size: 16px; box-sizing: border-box; }
         .footer-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 16px; border-top: 1px solid #eee; display: flex; }
         .btn-submit { flex: 1; height: 50px; background: var(--primary-color); color: white; border: none; border-radius: 25px; font-size: 18px; font-weight: bold; cursor: pointer; }
         .btn-submit:disabled { background: #ccc; cursor: not-allowed; }
@@ -39,8 +39,15 @@
         <div id="pName" class="product-title">載入中...</div>
         
         <div class="selector-box">
-            <span class="spec-label">選擇規格（顏色/尺寸）</span>
-            <select id="specSel"><option value="">載入規格中...</option></select>
+            <div id="colorArea">
+                <span class="spec-label">選擇顏色</span>
+                <select id="colorSel"></select>
+            </div>
+            <div id="sizeArea">
+                <span class="spec-label">選擇尺寸</span>
+                <select id="sizeSel"></select>
+            </div>
+            
             <span class="spec-label">購買數量</span>
             <input type="number" id="qtyInput" value="1" min="1">
         </div>
@@ -58,7 +65,8 @@ let product = null;
 let user = {};
 
 async function init() {
-    await liff.init({ liffId: "2008857998-imqg5sNq" });
+    // 使用您指定的下單詳情 LIFF ID
+    await liff.init({ liffId: "2008857998-qOI2DqCC" });
     if (!liff.isLoggedIn()) { liff.login(); return; }
     const profile = await liff.getProfile();
     user = { id: profile.userId, name: profile.displayName };
@@ -77,6 +85,7 @@ function render() {
     document.getElementById('pPrice').innerText = product.price;
     document.getElementById('pDesc').innerText = product.description || "目前尚無詳細說明。";
 
+    // 處理媒體顯示
     const media = document.getElementById('mediaContainer');
     if (product.youtube) {
         const vid = product.youtube.includes('v=') ? product.youtube.split('v=')[1].split('&')[0] : product.youtube.split('/').pop();
@@ -86,16 +95,26 @@ function render() {
         media.innerHTML = `<img src="${images[0] || 'https://via.placeholder.com/800x450'}">`;
     }
 
-    const specSel = document.getElementById('specSel');
-    if (product.specSize) {
-        // 解析格式：規格:紅,藍 | 尺寸:S,M
-        const parts = product.specSize.split('|').flatMap(p => {
-            const val = p.split(':')[1] || p;
-            return val.split(',').map(s => s.trim());
-        }).filter(s => s);
-        specSel.innerHTML = parts.map(s => `<option value="${s}">${s}</option>`).join('');
+    // 規格解析邏輯：規格:紅,藍 | 尺寸:S,M
+    const colorSel = document.getElementById('colorSel');
+    const sizeSel = document.getElementById('sizeSel');
+    
+    if (product.specSize && product.specSize.includes('|')) {
+        const parts = product.specSize.split('|');
+        
+        parts.forEach(part => {
+            if (part.includes('規格:')) {
+                const colors = part.replace('規格:', '').trim().split(',').filter(s => s);
+                colorSel.innerHTML = colors.map(c => `<option value="${c}">${c}</option>`).join('');
+            } else if (part.includes('尺寸:')) {
+                const sizes = part.replace('尺寸:', '').trim().split(',').filter(s => s);
+                sizeSel.innerHTML = sizes.map(s => `<option value="${s}">${s}</option>`).join('');
+            }
+        });
     } else {
-        specSel.innerHTML = `<option value="單一規格">單一規格</option>`;
+        // 如果沒有 | 分隔符，視為單一選擇或格式異常
+        colorSel.innerHTML = `<option value="單一規格">預設規格</option>`;
+        document.getElementById('sizeArea').style.display = 'none';
     }
 
     if (product.status === '已結單') {
@@ -107,7 +126,13 @@ function render() {
 
 async function submitOrder() {
     const qty = parseInt(document.getElementById('qtyInput').value);
-    const spec = document.getElementById('specSel').value;
+    const color = document.getElementById('colorSel').value;
+    const sizeArea = document.getElementById('sizeArea');
+    const size = (sizeArea.style.display !== 'none') ? document.getElementById('sizeSel').value : "";
+    
+    // 組合最終存回 Sheets 的規格字串
+    const finalSpec = size ? `${color} / ${size}` : color;
+
     if (!qty || qty < 1) return alert("請輸入正確數量");
 
     const payload = {
@@ -115,7 +140,7 @@ async function submitOrder() {
         buyerName: user.name,
         productCode: product.productCode,
         productName: product.productName,
-        spec: spec,
+        spec: finalSpec,
         qty: qty,
         price: product.price,
         total: product.price * qty,
