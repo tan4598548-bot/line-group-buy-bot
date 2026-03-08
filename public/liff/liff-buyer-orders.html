@@ -1,146 +1,163 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <title>我的訂單紀錄</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <style>
-    :root { --primary-color: #06c755; --danger-color: #dc3545; --bg: #f8f9fa; }
-    body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; }
-    .nav-bar { display: flex; align-items: center; margin-bottom: 20px; }
-    .back-link { text-decoration: none; color: #666; font-size: 14px; margin-right: 10px; }
-    
-    .order-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-    .order-header { display: flex; justify-content: space-between; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px; margin-bottom: 10px; }
-    .order-status { font-size: 12px; font-weight: bold; padding: 2px 8px; border-radius: 4px; background: #e9ecef; }
-    .status-warning { color: #856404; background: #fff3cd; } /* 待點貨/結單前 */
-    .status-success { color: #155724; background: #d4edda; } /* 已到貨 */
-    .status-danger { color: #721c24; background: #f8d7da; } /* 斷貨 */
+    <meta charset="UTF-8">
+    <title>我的訂單紀錄</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        :root { --primary-color: #06c755; --danger-color: #dc3545; --bg: #f8f9fa; --price-color: #e44d26; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; }
+        .nav-bar { display: flex; align-items: center; margin-bottom: 20px; }
+        .back-link { text-decoration: none; color: #666; font-size: 14px; margin-right: 10px; }
+        
+        .order-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .order-header { display: flex; justify-content: space-between; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px; margin-bottom: 10px; }
+        .order-status { font-size: 12px; font-weight: bold; padding: 2px 8px; border-radius: 4px; background: #e9ecef; }
+        .status-warning { color: #856404; background: #fff3cd; } /* 待點貨 */
+        .status-success { color: #155724; background: #d4edda; } /* 已到貨 */
+        .status-danger { color: #721c24; background: #f8d7da; } /* 斷貨 / 買家取消 */
 
-    .order-body { display: flex; gap: 12px; }
-    .order-info { flex: 1; }
-    .order-name { font-weight: bold; font-size: 15px; margin-bottom: 5px; }
-    .order-meta { font-size: 13px; color: #777; }
-    
-    .order-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #eee; }
-    .btn-sm { padding: 6px 12px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; background: white; }
-    .btn-edit { color: var(--primary-color); border-color: var(--primary-color); }
-    .btn-del { color: var(--danger-color); border-color: var(--danger-color); }
-    
-    #loading { text-align: center; padding: 50px; color: #999; }
-  </style>
+        .order-body { display: flex; gap: 12px; }
+        .order-info { flex: 1; }
+        .order-name { font-weight: bold; font-size: 15px; margin-bottom: 5px; color: #333; }
+        .order-meta { font-size: 13px; color: #777; }
+        
+        .order-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #eee; }
+        .btn-sm { padding: 6px 12px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; background: white; transition: 0.2s; }
+        .btn-edit { color: var(--primary-color); border-color: var(--primary-color); }
+        .btn-del { color: var(--danger-color); border-color: var(--danger-color); }
+        
+        #loading { text-align: center; padding: 50px; color: #999; }
+    </style>
 </head>
 <body>
 
-  <div class="nav-bar">
-    <a href="liff-order.html" class="back-link">⬅ 返回商城</a>
-    <h3 style="margin:0;">📋 我的訂單</h3>
-  </div>
+    <div class="nav-bar">
+        <a href="liff-order.html" class="back-link">⬅ 返回商城</a>
+        <h3 style="margin:0;">📋 我的訂單</h3>
+    </div>
 
-  <div id="loading">讀取您的訂購紀錄...</div>
-  <div id="order-list"></div>
+    <div id="loading">正在讀取訂購紀錄...</div>
+    <div id="order-list"></div>
 
 <script>
 let userProfile = null;
 
 async function init() {
-  try {
-    // 使用您原本的 LIFF ID: 2008857998-jbKsKkPY
-    await liff.init({ liffId: "2008857998-jbKsKkPY" });
-    if (!liff.isLoggedIn()) { liff.login(); return; }
-    userProfile = await liff.getProfile();
-    fetchOrders();
-  } catch (err) { console.error(err); }
+    try {
+        // 使用您的買家訂單 LIFF ID
+        await liff.init({ liffId: "2008857998-jbKsKkPY" });
+        if (!liff.isLoggedIn()) { liff.login(); return; }
+        userProfile = await liff.getProfile();
+        fetchOrders();
+    } catch (err) { 
+        console.error("LIFF 初始化失敗", err);
+        document.getElementById("loading").innerText = "載入失敗，請稍後再試";
+    }
 }
 
 async function fetchOrders() {
-  const [ordersRes, productsRes] = await Promise.all([
-    fetch('/api/admin/orders'),
-    fetch('/api/products')
-  ]);
-  
-  const allOrders = await ordersRes.json();
-  const allProducts = await productsRes.json();
-  
-  // 1. 只篩選出當前買家的訂單
-  const myOrders = allOrders.filter(o => o.buyerId === userProfile.userId);
-  const listDiv = document.getElementById("order-list");
-  document.getElementById("loading").style.display = "none";
+    try {
+        const [ordersRes, productsRes] = await Promise.all([
+            fetch('/api/admin/orders'),
+            fetch('/api/products')
+        ]);
+        
+        const allOrders = await ordersRes.json();
+        const allProducts = await productsRes.json();
+        
+        // 篩選出該買家的訂單
+        const myOrders = allOrders.filter(o => o.buyerId === userProfile.userId);
+        const listDiv = document.getElementById("order-list");
+        document.getElementById("loading").style.display = "none";
 
-  if (myOrders.length === 0) {
-    listDiv.innerHTML = '<p style="text-align:center; color:#999; margin-top:50px;">目前沒有訂購紀錄</p>';
-    return;
-  }
+        if (myOrders.length === 0) {
+            listDiv.innerHTML = '<p style="text-align:center; color:#999; margin-top:50px;">您目前沒有任何訂購紀錄</p>';
+            return;
+        }
 
-  listDiv.innerHTML = myOrders.map(order => {
-    // 2. 查找對應商品的狀態，判斷是否已結單
-    const product = allProducts.find(p => p.productCode === order.productCode);
-    const isProductClosed = product && product.status === '已結單';
-    const isOrderLocked = order.status !== '待點貨' && order.status !== ''; 
-    
-    // 3. 判斷是否允許修改/刪除 (結單後或狀態改變後鎖定)
-    const canAction = !isProductClosed && !isOrderLocked;
+        listDiv.innerHTML = myOrders.map(order => {
+            const product = allProducts.find(p => p.productCode === order.productCode);
+            const isProductClosed = product && (product.status === '已結單' || product.status === '斷貨');
+            const isOrderProcessed = order.status !== '待點貨' && order.status !== ''; 
+            
+            // 只有在「未結單」且訂單狀態還是「待點貨」時才允許修改
+            const canAction = !isProductClosed && !isOrderProcessed && order.status !== '買家取消';
 
-    return `
-      <div class="order-card">
-        <div class="order-header">
-          <span class="order-meta">ID: ${order.orderId}</span>
-          <span class="order-status ${order.status === '已到貨' ? 'status-success' : (order.status === '斷貨' ? 'status-danger' : 'status-warning')}">
-            ${isProductClosed && order.status === '待點貨' ? '已結單處理中' : order.status}
-          </span>
-        </div>
-        <div class="order-body">
-          <div class="order-info">
-            <div class="order-name">${order.productName}</div>
-            <div class="order-meta">規格: ${order.spec} / 數量: ${order.qty}</div>
-            <div style="color:var(--price-color); font-weight:bold; margin-top:5px;">總計: $${order.total}</div>
-          </div>
-        </div>
-        ${canAction ? `
-          <div class="order-footer">
-            <button class="btn-sm btn-edit" onclick="editOrder('${order.orderId}', '${order.qty}')">修改數量</button>
-            <button class="btn-sm btn-del" onclick="deleteOrder('${order.orderId}')">取消訂單</button>
-          </div>
-        ` : `<div style="font-size:11px; color:#aaa; text-align:right; margin-top:10px;">⚠️ 團主已結單，無法修改</div>`}
-      </div>
-    `;
-  }).join("");
+            let statusClass = 'status-warning';
+            if (order.status === '已到貨') statusClass = 'status-success';
+            if (order.status === '斷貨' || order.status === '買家取消') statusClass = 'status-danger';
+
+            return `
+                <div class="order-card">
+                    <div class="order-header">
+                        <span class="order-meta">日期: ${order.orderDate || 'N/A'}</span>
+                        <span class="order-status ${statusClass}">
+                            ${isProductClosed && order.status === '待點貨' ? '已結單處理中' : order.status}
+                        </span>
+                    </div>
+                    <div class="order-body">
+                        <div class="order-info">
+                            <div class="order-name">${order.productName}</div>
+                            <div class="order-meta">規格: ${order.spec} / 數量: ${order.qty}</div>
+                            <div style="color:var(--price-color); font-weight:bold; margin-top:5px;">總計: $${order.total}</div>
+                        </div>
+                    </div>
+                    ${canAction ? `
+                        <div class="order-footer">
+                            <button class="btn-sm btn-edit" onclick="editOrder('${order.orderId}', ${order.qty}, ${order.price})">修改數量</button>
+                            <button class="btn-sm btn-del" onclick="deleteOrder('${order.orderId}')">取消訂單</button>
+                        </div>
+                    ` : `<div style="font-size:11px; color:#aaa; text-align:right; margin-top:10px;">⚠️ 訂單已鎖定或商品已結單</div>`}
+                </div>
+            `;
+        }).join("");
+    } catch (err) {
+        console.error("讀取訂單失敗", err);
+    }
 }
 
-async function editOrder(orderId, oldQty) {
-  const newQty = prompt("請輸入新的訂購數量:", oldQty);
-  if (newQty === null || newQty === oldQty || isNaN(newQty) || newQty <= 0) return;
+async function editOrder(orderId, oldQty, price) {
+    const newQty = prompt("請輸入新的訂購數量:", oldQty);
+    if (newQty === null || newQty == oldQty || isNaN(newQty) || newQty <= 0) return;
 
-  const res = await fetch(`/api/admin/orders/${orderId}/status`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      qty: parseInt(newQty),
-      status: '待點貨' // 保持待點貨狀態
-    })
-  });
+    const payload = { 
+        qty: parseInt(newQty),
+        total: parseInt(newQty) * price,
+        status: '待點貨' 
+    };
 
-  if (res.ok) {
-    alert("數量已更新");
-    fetchOrders();
-  }
+    const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+        alert("✅ 數量已更新");
+        fetchOrders();
+    } else {
+        alert("❌ 更新失敗，請稍後再試");
+    }
 }
 
 async function deleteOrder(orderId) {
-  if (!confirm("確定要取消這筆訂單嗎？")) return;
-  
-  // 這裡建議在後端新增一個 DELETE 路由，或使用 PUT 將狀態改為 "買家取消"
-  const res = await fetch(`/api/admin/orders/${orderId}/status`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: '買家取消' })
-  });
+    if (!confirm("確定要取消這筆訂單嗎？")) return;
+    
+    // 將狀態更新為「買家取消」
+    const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: '買家取消' })
+    });
 
-  if (res.ok) {
-    alert("訂單已取消");
-    fetchOrders();
-  }
+    if (res.ok) {
+        alert("✅ 訂單已取消");
+        fetchOrders();
+    } else {
+        alert("❌ 取消失敗，請稍後再試");
+    }
 }
 
 window.onload = init;
