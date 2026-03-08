@@ -39,13 +39,12 @@
         <div class="selector-box">
             <div id="colorArea">
                 <span class="spec-label">選擇顏色</span>
-                <select id="colorSel"><option value="">請選擇顏色</option></select>
+                <select id="colorSel"><option value="">載入中...</option></select>
             </div>
             <div id="sizeArea">
                 <span class="spec-label">選擇尺寸</span>
-                <select id="sizeSel"><option value="">請選擇尺寸</option></select>
+                <select id="sizeSel"><option value="">載入中...</option></select>
             </div>
-            
             <span class="spec-label">購買數量</span>
             <input type="number" id="qtyInput" value="1" min="1">
         </div>
@@ -63,19 +62,25 @@ let product = null;
 let user = {};
 
 async function init() {
-    // 根據您的 LIFF ID 清單，第 12 項為詳情頁
-    await liff.init({ liffId: "2008857998-qOI2DqCC" });
-    if (!liff.isLoggedIn()) { liff.login(); return; }
-    const profile = await liff.getProfile();
-    user = { id: profile.userId, name: profile.displayName };
+    try {
+        await liff.init({ liffId: "2008857998-qOI2DqCC" });
+        if (!liff.isLoggedIn()) { liff.login(); return; }
+        const profile = await liff.getProfile();
+        user = { id: profile.userId, name: profile.displayName };
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    const res = await fetch("/api/products");
-    const products = await res.json();
-    product = products.find(p => p.productCode === code);
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        
+        // 使用絕對路徑確保 API 呼叫正確
+        const res = await fetch("/api/products");
+        const products = await res.json();
+        product = products.find(p => p.productCode === code);
 
-    if (product) render();
+        if (product) render();
+        else alert("找不到商品資料，請回上一頁重新選擇");
+    } catch (err) {
+        console.error("初始化失敗:", err);
+    }
 }
 
 function render() {
@@ -83,6 +88,7 @@ function render() {
     document.getElementById('pPrice').innerText = product.price;
     document.getElementById('pDesc').innerText = product.description || "目前尚無詳細說明。";
 
+    // 影片或圖片
     const media = document.getElementById('mediaContainer');
     if (product.youtube) {
         const vid = product.youtube.includes('v=') ? product.youtube.split('v=')[1].split('&')[0] : product.youtube.split('/').pop();
@@ -95,27 +101,25 @@ function render() {
     const colorSel = document.getElementById('colorSel');
     const sizeSel = document.getElementById('sizeSel');
     
-    // 清空並加入預設選項
+    // 預設清空
     colorSel.innerHTML = '<option value="">請選擇顏色</option>';
     sizeSel.innerHTML = '<option value="">請選擇尺寸</option>';
 
-    // 規格拆分核心邏輯
+    // --- 改進的拆分邏輯 ---
     if (product.specSize && product.specSize.includes('|')) {
         const parts = product.specSize.split('|');
         
         parts.forEach(part => {
-            if (part.includes('規格:')) {
-                // 去除「規格:」字串，並依照逗號拆分
-                const colors = part.split(':')[1].trim().split(',').filter(s => s);
-                colorSel.innerHTML += colors.map(c => `<option value="${c}">${c}</option>`).join('');
-            } 
-            if (part.includes('尺寸:')) {
-                const sizes = part.split(':')[1].trim().split(',').filter(s => s);
-                sizeSel.innerHTML += sizes.map(s => `<option value="${s}">${s}</option>`).join('');
+            const cleanPart = part.trim();
+            if (cleanPart.startsWith('規格:')) {
+                const options = cleanPart.substring(3).split(',').map(s => s.trim()).filter(s => s);
+                colorSel.innerHTML += options.map(c => `<option value="${c}">${c}</option>`).join('');
+            } else if (cleanPart.startsWith('尺寸:')) {
+                const options = cleanPart.substring(3).split(',').map(s => s.trim()).filter(s => s);
+                sizeSel.innerHTML += options.map(s => `<option value="${s}">${s}</option>`).join('');
             }
         });
     } else {
-        // 若格式不符，視為單一規格
         colorSel.innerHTML = `<option value="單一規格">單一規格</option>`;
         document.getElementById('sizeArea').style.display = 'none';
     }
@@ -128,21 +132,19 @@ function render() {
 }
 
 async function submitOrder() {
-    const qty = parseInt(document.getElementById('qtyInput').value);
+    const btn = document.getElementById('submitBtn');
     const colorVal = document.getElementById('colorSel').value;
     const sizeVal = document.getElementById('sizeSel').value;
     const isSizeVisible = document.getElementById('sizeArea').style.display !== 'none';
+    const qty = parseInt(document.getElementById('qtyInput').value);
 
-    // 防呆校驗
     if (colorVal === "") return alert("⚠️ 請選擇顏色！");
     if (isSizeVisible && sizeVal === "") return alert("⚠️ 請選擇尺寸！");
-    if (!qty || qty < 1) return alert("⚠️ 請輸入購買數量！");
+    if (!qty || qty < 1) return alert("⚠️ 請輸入正確購買數量！");
 
     const finalSpec = isSizeVisible ? `${colorVal} / ${sizeVal}` : colorVal;
 
-    // Payload 必須對應 sheetService.appendOrder 的要求
     const payload = {
-        orderId: `ORD${Date.now()}`,
         buyerId: user.id,
         buyerName: user.name,
         productCode: product.productCode,
@@ -151,11 +153,14 @@ async function submitOrder() {
         qty: qty,
         price: product.price,
         total: product.price * qty,
-        orderDate: new Date().toLocaleDateString('zh-TW'),
         status: '待點貨'
     };
 
+    btn.disabled = true;
+    btn.innerText = "下單傳送中...";
+
     try {
+        // 重要：確保這裡的路徑與後端 index.js 的 app.post 一致
         const res = await fetch('/api/admin/orders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -163,14 +168,20 @@ async function submitOrder() {
         });
 
         if (res.ok) {
-            alert("✅ 下單成功！系統將轉跳至您的訂單紀錄。");
+            alert("✅ 下單成功！");
             window.location.href = "liff-buyer-orders.html";
         } else {
-            const errorData = await res.json();
-            alert("❌ 下單失敗：" + (errorData.error || "伺服器錯誤"));
+            const errJson = await res.json();
+            alert("❌ 下單失敗: " + (errJson.error || "伺服器拒絕請求"));
+            btn.disabled = false;
+            btn.innerText = "🛒 確認下單";
         }
     } catch (err) {
-        alert("❌ 網路錯誤，請稍後再試");
+        // 如果進到這裡，通常是 URL 寫錯或是 SSL/Domain 問題
+        alert("❌ 網路連線錯誤！\n請檢查 Render 網址是否正確。");
+        console.error("Fetch Error:", err);
+        btn.disabled = false;
+        btn.innerText = "🛒 確認下單";
     }
 }
 window.onload = init;

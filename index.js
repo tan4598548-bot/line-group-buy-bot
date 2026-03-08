@@ -11,7 +11,7 @@ const app = express();
 
 app.use(express.json());
 
-// 1. 優先處理 LIFF 檔案路由
+// 1. 優先處理 LIFF 檔案路由 (讓 /liff/ 也能抓到 public/liff 裡的檔案)
 app.get('/liff/:filename', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'liff', req.params.filename);
     res.sendFile(filePath, (err) => {
@@ -22,7 +22,7 @@ app.get('/liff/:filename', (req, res) => {
 // 2. 靜態檔案路徑
 app.use(express.static(path.join(__dirname, "public")));
 
-// --- 商品與訂單 API ---
+// --- 商品管理 API ---
 app.get("/api/products", async (req, res) => res.json(await sheetService.getProducts(req.query.filter)));
 
 app.post("/api/products", async (req, res) => {
@@ -46,6 +46,7 @@ app.delete("/api/products/:code", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// --- 斷貨通知 API ---
 app.post('/api/admin/products/out-of-stock', async (req, res) => {
     const { productCode, productName } = req.body;
     try {
@@ -54,9 +55,40 @@ app.post('/api/admin/products/out-of-stock', async (req, res) => {
         await Promise.all(buyers.map(async (b) => {
             try {
                 await client.pushMessage(b.lineId, `【斷貨通知】\n商品「${productName}」因故斷貨，系統已取消訂單。`);
-            } catch (e) {}
+            } catch (e) { console.error("LINE 推播失敗:", e.message); }
         }));
         res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// --- 訂單管理 API (修正：補上遺失的路由) ---
+
+// 獲取所有訂單 (後台管理用)
+app.get("/api/admin/orders", async (req, res) => {
+    try {
+        const orders = await sheetService.getOrders();
+        res.json(orders);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 買家下單 (前端 product-detail 呼叫點)
+app.post("/api/admin/orders", async (req, res) => {
+    try {
+        // 呼叫 sheetService.appendOrder 寫入 Google Sheets
+        await sheetService.appendOrder(req.body);
+        res.json({ ok: true });
+    } catch (e) { 
+        console.error("寫入訂單失敗:", e.message);
+        res.status(400).json({ error: "寫入 Google Sheets 失敗" }); 
+    }
+});
+
+// 買家查看自己的訂單
+app.get("/api/buyer/orders/:lineId", async (req, res) => {
+    try {
+        const allOrders = await sheetService.getOrders();
+        const myOrders = allOrders.filter(o => o.buyerId === req.params.lineId);
+        res.json(myOrders);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
