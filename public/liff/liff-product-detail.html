@@ -41,11 +41,15 @@
         <div class="selector-box">
             <div id="colorArea">
                 <span class="spec-label">選擇顏色</span>
-                <select id="colorSel"></select>
+                <select id="colorSel">
+                    <option value="">請選擇顏色</option>
+                </select>
             </div>
             <div id="sizeArea">
                 <span class="spec-label">選擇尺寸</span>
-                <select id="sizeSel"></select>
+                <select id="sizeSel">
+                    <option value="">請選擇尺寸</option>
+                </select>
             </div>
             
             <span class="spec-label">購買數量</span>
@@ -65,7 +69,6 @@ let product = null;
 let user = {};
 
 async function init() {
-    // 使用您指定的下單詳情 LIFF ID
     await liff.init({ liffId: "2008857998-qOI2DqCC" });
     if (!liff.isLoggedIn()) { liff.login(); return; }
     const profile = await liff.getProfile();
@@ -85,7 +88,6 @@ function render() {
     document.getElementById('pPrice').innerText = product.price;
     document.getElementById('pDesc').innerText = product.description || "目前尚無詳細說明。";
 
-    // 處理媒體顯示
     const media = document.getElementById('mediaContainer');
     if (product.youtube) {
         const vid = product.youtube.includes('v=') ? product.youtube.split('v=')[1].split('&')[0] : product.youtube.split('/').pop();
@@ -95,25 +97,27 @@ function render() {
         media.innerHTML = `<img src="${images[0] || 'https://via.placeholder.com/800x450'}">`;
     }
 
-    // 規格解析邏輯：規格:紅,藍 | 尺寸:S,M
     const colorSel = document.getElementById('colorSel');
     const sizeSel = document.getElementById('sizeSel');
     
+    // 初始化預設選項
+    colorSel.innerHTML = '<option value="">請選擇顏色</option>';
+    sizeSel.innerHTML = '<option value="">請選擇尺寸</option>';
+
     if (product.specSize && product.specSize.includes('|')) {
         const parts = product.specSize.split('|');
         
         parts.forEach(part => {
             if (part.includes('規格:')) {
                 const colors = part.replace('規格:', '').trim().split(',').filter(s => s);
-                colorSel.innerHTML = colors.map(c => `<option value="${c}">${c}</option>`).join('');
+                colorSel.innerHTML += colors.map(c => `<option value="${c}">${c}</option>`).join('');
             } else if (part.includes('尺寸:')) {
                 const sizes = part.replace('尺寸:', '').trim().split(',').filter(s => s);
-                sizeSel.innerHTML = sizes.map(s => `<option value="${s}">${s}</option>`).join('');
+                sizeSel.innerHTML += sizes.map(s => `<option value="${s}">${s}</option>`).join('');
             }
         });
     } else {
-        // 如果沒有 | 分隔符，視為單一選擇或格式異常
-        colorSel.innerHTML = `<option value="單一規格">預設規格</option>`;
+        colorSel.innerHTML = `<option value="單一規格">單一規格</option>`;
         document.getElementById('sizeArea').style.display = 'none';
     }
 
@@ -126,14 +130,27 @@ function render() {
 
 async function submitOrder() {
     const qty = parseInt(document.getElementById('qtyInput').value);
-    const color = document.getElementById('colorSel').value;
+    const colorSel = document.getElementById('colorSel');
+    const sizeSel = document.getElementById('sizeSel');
     const sizeArea = document.getElementById('sizeArea');
-    const size = (sizeArea.style.display !== 'none') ? document.getElementById('sizeSel').value : "";
-    
-    // 組合最終存回 Sheets 的規格字串
-    const finalSpec = size ? `${color} / ${size}` : color;
 
-    if (!qty || qty < 1) return alert("請輸入正確數量");
+    // --- 規格必選檢查 ---
+    if (colorSel.value === "") {
+        alert("⚠️ 請選擇顏色規格！");
+        return;
+    }
+
+    if (sizeArea.style.display !== 'none' && sizeSel.value === "") {
+        alert("⚠️ 請選擇尺寸規格！");
+        return;
+    }
+
+    if (!qty || qty < 1) {
+        alert("⚠️ 請輸入正確購買數量！");
+        return;
+    }
+
+    const finalSpec = (sizeArea.style.display !== 'none') ? `${colorSel.value} / ${sizeSel.value}` : colorSel.value;
 
     const payload = {
         buyerId: user.id,
@@ -158,7 +175,7 @@ async function submitOrder() {
         alert("✅ 下單成功！系統將轉跳至您的訂單紀錄。");
         window.location.href = "liff-buyer-orders.html";
     } else {
-        alert("下單失敗，請稍後再試");
+        alert("❌ 下單失敗，請稍後再試");
     }
 }
 window.onload = init;
