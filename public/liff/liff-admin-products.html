@@ -16,8 +16,6 @@
     .btn-close { background: #6c757d; color: white; }
     .btn-out { background: #f39c12; color: white; }
     .btn-back { background: #6c757d; color: white; padding: 8px 12px; border-radius: 4px; text-decoration: none; font-size: 14px; }
-    
-    /* Modal 樣式 */
     #editModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; justify-content:center; align-items:center; }
     .modal-content { background:white; padding:20px; border-radius:8px; width:90%; max-height:80vh; overflow-y:auto; }
     label { font-weight: bold; display: block; margin-top: 10px; font-size: 14px; }
@@ -52,10 +50,8 @@
 
 <script>
 let products = [];
-
 async function init() {
   try {
-    // 這裡使用您原本的 LIFF ID
     await liff.init({ liffId: "2008857998-AoqmEajq" }); 
     fetchData();
   } catch (err) { console.error("LIFF Init failed", err); }
@@ -65,10 +61,7 @@ async function fetchData() {
   const res = await fetch("/api/products");
   products = await res.json();
   const list = document.getElementById("product-list");
-  if (products.length === 0) {
-    list.innerHTML = "目前暫無商品";
-    return;
-  }
+  if (products.length === 0) { list.innerHTML = "目前暫無商品"; return; }
   list.innerHTML = products.map(p => `
     <div class="product-card">
       <span class="status-badge">${p.status || '上架'}</span>
@@ -84,7 +77,6 @@ async function fetchData() {
   `).join("");
 }
 
-// 開啟修正彈窗
 function openEdit(code) {
   const p = products.find(i => i.productCode === code);
   document.getElementById("editCode").value = p.productCode;
@@ -98,7 +90,6 @@ function openEdit(code) {
 
 function closeModal() { document.getElementById("editModal").style.display = "none"; }
 
-// 儲存修正 (保留原邏輯)
 async function saveEdit() {
   const code = document.getElementById("editCode").value;
   const payload = {
@@ -113,50 +104,33 @@ async function saveEdit() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  if (res.ok) {
-    alert("商品資訊已更新");
-    closeModal();
-    fetchData();
-  }
+  if (res.ok) { closeModal(); fetchData(); }
 }
 
-// 刪除功能 (保留原邏輯)
 async function deleteItem(code) {
-  if (confirm("確定要刪除這項商品嗎？此動作無法復原。")) {
+  if (confirm("確定要刪除這項商品嗎？")) {
     await fetch("/api/products/" + code, { method: "DELETE" });
     fetchData();
   }
 }
 
-// 斷貨通知功能 (新增邏輯：對接 API + 自動通知)
 async function markOutOfStock(code, name) {
-  if(!confirm(`⚠️ 警告：將「${name}」標記為斷貨，系統會自動發送 LINE 通知給所有下單買家並取消訂單。確定執行？`)) return;
+  if(!confirm(`⚠️ 將「${name}」標記為斷貨會自動通知買家並取消訂單。確定？`)) return;
   const res = await fetch('/api/admin/products/out-of-stock', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ productCode: code, productName: name })
   });
-  if(res.ok) {
-    const r = await res.json();
-    alert(r.message);
-    fetchData();
-  } else {
-    alert("斷貨處理失敗，請檢查後端日誌");
-  }
+  if(res.ok) { alert("通知已發送"); fetchData(); }
 }
 
-// 簡易狀態更新 (結單用)
 async function updateSimpleStatus(code, status) {
-  if(!confirm(`確定要將商品標記為「${status}」嗎？`)) return;
-  // 直接利用現有的 update API
   const res = await fetch("/api/products/" + code, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status: status })
   });
-  if (res.ok) {
-    fetchData();
-  }
+  if (res.ok) fetchData();
 }
 
 window.onload = init;
