@@ -6,103 +6,116 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: -apple-system, sans-serif; background: #fff; padding: 20px; margin: 0; }
-    h2 { display: flex; align-items: center; font-size: 24px; margin-bottom: 20px; color: #333; }
-    .box-icon { width: 30px; margin-right: 10px; }
-    .form-group { margin-bottom: 12px; }
+    body { font-family: -apple-system, sans-serif; background: #f8f9fa; padding: 20px; margin: 0; }
+    h2 { font-size: 22px; margin-bottom: 20px; color: #333; text-align: center; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
     input, select { 
-      width: 100%; padding: 14px; border: 1px solid #e0e0e0; border-radius: 4px; 
-      box-sizing: border-box; font-size: 18px; color: #333;
+      width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; 
+      box-sizing: border-box; font-size: 16px; background: white;
     }
-    input::placeholder { color: #aaa; }
     .btn-submit { 
       background: #00c300; color: white; border: none; width: 100%; 
-      padding: 15px; border-radius: 4px; font-size: 18px; font-weight: bold; 
-      margin-top: 10px; cursor: pointer;
+      padding: 16px; border-radius: 8px; font-size: 18px; font-weight: bold; 
+      margin-top: 20px; cursor: pointer;
     }
+    .btn-submit:disabled { background: #ccc; }
   </style>
 </head>
 <body>
   <h2>📦 新增團購商品</h2>
   <form id="productForm">
     <div class="form-group">
-      <input type="text" id="productName" placeholder="商品名稱" required>
+      <label>商品名稱</label>
+      <input type="text" id="productName" placeholder="例如：韓版毛衣" required>
     </div>
     <div class="form-group">
-      <input type="number" id="price" placeholder="單價" required>
+      <label>販售單價</label>
+      <input type="number" id="price" placeholder="請輸入金額" required>
     </div>
     <div class="form-group">
-      <input type="number" id="cost" placeholder="成本設定 (輸入成本數字)">
+      <label>成本設定</label>
+      <input type="number" id="cost" placeholder="僅供後台查看" value="0">
     </div>
     <div class="form-group">
-      <input type="text" id="colorMap" placeholder="規格 (如：紅色,藍色)">
+      <label>顏色規格 (多個請用逗號隔開)</label>
+      <input type="text" id="colorMap" placeholder="如：紅色,藍色,黑色">
     </div>
     <div class="form-group">
-      <input type="text" id="sizeMap" placeholder="尺寸 (如：S,M,L)">
+      <label>尺寸規格 (多個請用逗號隔開)</label>
+      <input type="text" id="sizeMap" placeholder="如：S,M,L,XL">
     </div>
     <div class="form-group">
+      <label>上架類型</label>
       <select id="type">
         <option value="normal">預購 (Normal)</option>
         <option value="overstock">現貨 (Overstock)</option>
       </select>
     </div>
     <div class="form-group">
-      <input type="number" id="total_stock" placeholder="現貨初始庫存 (預購填0)" value="0">
+      <label>圖片網址</label>
+      <input type="text" id="images" placeholder="https://...">
     </div>
     <div class="form-group">
-      <input type="text" id="images" placeholder="圖片連結 (網址)">
+      <label>YouTube 影片 ID 或網址</label>
+      <input type="text" id="youtube" placeholder="影片代碼或連結">
     </div>
     <div class="form-group">
-      <input type="text" id="youtube" placeholder="YouTube 連結 (網址)">
-    </div>
-    <div class="form-group">
-      <input type="text" id="video" placeholder="影音檔連結 (網址)">
-    </div>
-    <div class="form-group">
-      <input type="date" id="closeDate" title="結單日設定">
+      <label>預計結單日期</label>
+      <input type="date" id="closeDate">
     </div>
 
-    <button type="submit" class="btn-submit" id="submitBtn">確認上架</button>
+    <button type="submit" class="btn-submit" id="submitBtn">🚀 確認上架商品</button>
   </form>
 
   <script>
     async function init() {
-      await liff.init({ liffId: "2008857998-AoqmEajq" }); // admin-product
+      try {
+        await liff.init({ liffId: "2008857998-AoqmEajq" });
+      } catch (e) { console.error(e); }
     }
 
     document.getElementById("productForm").onsubmit = async (e) => {
       e.preventDefault();
       const btn = document.getElementById("submitBtn");
       btn.disabled = true;
-      btn.innerText = "上傳中...";
+      btn.innerText = "資料傳送中...";
 
-      const productCode = "P" + Date.now().toString().slice(-6);
+      // 組合規格字串，對齊 sheetService 的格式
+      const colors = document.getElementById("colorMap").value || "單一顏色";
+      const sizes = document.getElementById("sizeMap").value || "單一尺寸";
+      const specSize = `規格:${colors} | 尺寸:${sizes}`;
+
       const payload = {
-        productCode: productCode,
         productName: document.getElementById("productName").value,
         price: document.getElementById("price").value,
-        cost: document.getElementById("cost").value,
-        colorMap: document.getElementById("colorMap").value,
-        sizeMap: document.getElementById("sizeMap").value,
+        cost: document.getElementById("cost").value || 0,
+        specSize: specSize,
         type: document.getElementById("type").value,
-        total_stock: document.getElementById("total_stock").value,
-        images: document.getElementById("images").value,
-        youtube: document.getElementById("youtube").value,
-        video: document.getElementById("video").value,
-        closeDate: document.getElementById("closeDate").value
+        images: document.getElementById("images").value || "",
+        youtube: document.getElementById("youtube").value || "",
+        video: document.getElementById("video").value || "",
+        closeDate: document.getElementById("closeDate").value || "未設定",
+        status: "上架",
+        description: ""
       };
 
-      const res = await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
+      try {
+        const res = await fetch("/api/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
 
-      if (res.ok) {
-        alert("✅ 商品上架成功！");
-        location.href = "liff-admin-product.html";
-      } else {
-        alert("❌ 上架失敗");
+        if (res.ok) {
+          alert("✅ 商品已成功寫入 Google Sheets 並上架！");
+          // 修正：跳轉至複數 s 的檔案
+          location.href = "liff-admin-products.html";
+        } else {
+          throw new Error("伺服器回應錯誤");
+        }
+      } catch (err) {
+        alert("❌ 上架失敗：" + err.message);
         btn.disabled = false;
         btn.innerText = "確認上架";
       }
