@@ -1,5 +1,4 @@
-import dotenv from "dotenv";
-dotenv.config(); // 必須放在最前
+import 'dotenv/config'; // 💡 這一行會直接完成初始化，確保後續 import 讀得到變數
 
 import express from "express";
 import path from "path";
