@@ -24,16 +24,31 @@ app.use(express.static(path.join(__dirname, "public")));
 // --- 商品 API ---
 app.get("/api/products", async (req, res) => res.json(await sheetService.getProducts(req.query.filter)));
 
+// 新增商品 (修正卡死問題)
 app.post("/api/products", async (req, res) => {
     try {
         const code = await sheetService.appendProduct(req.body);
-        res.json({ code });
+        res.json({ code, ok: true }); // 回傳 ok: true 讓前端知道結束了
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 修正商品資訊
+app.put("/api/products/:code", async (req, res) => {
+    try {
+        await sheetService.updateProduct(req.params.code, req.body);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 刪除商品 (標記為下架)
+app.delete("/api/products/:code", async (req, res) => {
+    try {
+        await sheetService.deleteProduct(req.params.code);
+        res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // --- 訂單 API ---
-
-// 取得所有訂單
 app.get("/api/admin/orders", async (req, res) => {
     try {
         const orders = await sheetService.getOrders();
@@ -41,7 +56,6 @@ app.get("/api/admin/orders", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 買家下單
 app.post("/api/admin/orders", async (req, res) => {
     try {
         await sheetService.appendOrder(req.body);
@@ -49,20 +63,13 @@ app.post("/api/admin/orders", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 關鍵：買家修改訂單 (數量/狀態)
 app.put("/api/admin/orders/:orderId/status", async (req, res) => {
     try {
-        const { orderId } = req.params;
-        const updateData = req.body;
-        await sheetService.updateOrderAndSplit(orderId, updateData);
+        await sheetService.updateOrderAndSplit(req.params.orderId, req.body);
         res.json({ ok: true });
-    } catch (e) { 
-        console.error("更新訂單出錯:", e.message);
-        res.status(500).json({ error: e.message }); 
-    }
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 斷貨處理
 app.post('/api/admin/products/out-of-stock', async (req, res) => {
     const { productCode, productName } = req.body;
     try {
