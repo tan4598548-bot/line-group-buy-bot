@@ -85,7 +85,19 @@ export const sheetService = {
       const headers = rows[0];
       return rows.slice(1).map(row => {
         const get = (n) => row[headers.indexOf(n)] || '';
-        return { orderId: get('order_ID'), buyerId: get('buyer_ID'), buyerName: get('buyer_name'), productCode: get('product_code'), productName: get('product_name'), spec: get('spec'), qty: get('qty'), price: get('price'), total: get('total'), date: get('order_date'), status: get('status') };
+        return { 
+          orderId: get('order_ID'), 
+          buyerId: get('buyer_ID'), 
+          buyerName: get('buyer_name'), 
+          productCode: get('product_code'), 
+          productName: get('product_name'), // 💡 已修正對應標題
+          spec: get('spec'), 
+          qty: get('qty'), 
+          price: get('price'), 
+          total: get('total'), 
+          orderDate: get('order_date'), 
+          status: get('status') 
+        };
       });
     } catch (e) { return []; }
   },
@@ -101,7 +113,7 @@ export const sheetService = {
     return orders.filter(o => o.productCode === productCode && o.status !== '買家取消').map(o => ({ lineId: o.buyerId, buyerName: o.buyerName, qty: o.qty }));
   },
 
-  // 核心：更新訂單與拆單功能 (優化 ID 比對)
+  // 核心：更新訂單與拆單功能
   async updateOrderAndSplit(orderId, data) {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:A' });
     const rows = res.data.values || [];
@@ -120,13 +132,11 @@ export const sheetService = {
       });
     }
 
-    // 處理到貨拆單邏輯
     if (data.split && data.arrivalQty) {
       const allRows = (await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K' })).data.values;
       const originalRow = allRows[rowIndex - 1];
       const remainingQty = parseInt(originalRow[6]) - data.arrivalQty;
       
-      // 更新原訂單為已到貨
       await sheets.spreadsheets.values.update({ 
         spreadsheetId: SPREADSHEET_ID, 
         range: `Orders!G${rowIndex}:K${rowIndex}`, 
@@ -134,7 +144,6 @@ export const sheetService = {
         resource: { values: [[data.arrivalQty, originalRow[7], (data.arrivalQty * originalRow[7]), originalRow[9], '已到貨']] } 
       });
 
-      // 剩餘數量新增為新訂單
       if (remainingQty > 0) {
         const newRow = [...originalRow];
         newRow[0] = `${orderId}-rem${Date.now().toString().slice(-3)}`;
