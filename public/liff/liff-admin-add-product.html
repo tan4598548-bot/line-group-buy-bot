@@ -38,11 +38,11 @@
       <input type="number" id="cost" placeholder="僅供後台查看" value="0">
     </div>
     <div class="form-group">
-      <label>顏色規格 (多個請用逗號隔開)</label>
+      <label>顏色規格</label>
       <input type="text" id="colorMap" placeholder="如：紅色,藍色,黑色">
     </div>
     <div class="form-group">
-      <label>尺寸規格 (多個請用逗號隔開)</label>
+      <label>尺寸規格</label>
       <input type="text" id="sizeMap" placeholder="如：S,M,L,XL">
     </div>
     <div class="form-group">
@@ -57,14 +57,13 @@
       <input type="text" id="images" placeholder="https://...">
     </div>
     <div class="form-group">
-      <label>YouTube 影片 ID 或網址</label>
-      <input type="text" id="youtube" placeholder="影片代碼或連結">
+      <label>YouTube 連結</label>
+      <input type="text" id="youtube" placeholder="影片連結">
     </div>
     <div class="form-group">
       <label>預計結單日期</label>
       <input type="date" id="closeDate">
     </div>
-
     <button type="submit" class="btn-submit" id="submitBtn">🚀 確認上架商品</button>
   </form>
 
@@ -81,7 +80,6 @@
       btn.disabled = true;
       btn.innerText = "資料傳送中...";
 
-      // 組合規格字串，對齊 sheetService 的格式
       const colors = document.getElementById("colorMap").value || "單一顏色";
       const sizes = document.getElementById("sizeMap").value || "單一尺寸";
       const specSize = `規格:${colors} | 尺寸:${sizes}`;
@@ -94,9 +92,8 @@
         type: document.getElementById("type").value,
         images: document.getElementById("images").value || "",
         youtube: document.getElementById("youtube").value || "",
-        video: document.getElementById("video").value || "",
-        closeDate: document.getElementById("closeDate").value || "未設定",
-        status: "上架",
+        closeDate: document.getElementById("closeDate").value || "",
+        status: "上架", // 💡 強制設定為「上架」以免鎖定
         description: ""
       };
 
@@ -108,11 +105,12 @@
         });
 
         if (res.ok) {
-          alert("✅ 商品已成功寫入 Google Sheets 並上架！");
-          // 修正：跳轉至複數 s 的檔案
-          location.href = "liff-admin-products.html";
+          alert("✅ 商品已成功上架！");
+          // 💡 修正跳轉路徑，加上 /liff/ 
+          window.location.replace("/liff/liff-admin-products.html");
         } else {
-          throw new Error("伺服器回應錯誤");
+          const errData = await res.json();
+          throw new Error(errData.error || "伺服器回應錯誤");
         }
       } catch (err) {
         alert("❌ 上架失敗：" + err.message);
