@@ -40,14 +40,21 @@ async function init() {
         if (!liff.isLoggedIn()) { liff.login(); return; }
         userProfile = await liff.getProfile();
         fetchOrders();
-    } catch (err) { document.getElementById("loading").innerText = "載入失敗"; }
+    } catch (err) { 
+        document.getElementById("loading").innerText = "載入失敗"; 
+        console.error(err);
+    }
 }
 
 async function fetchOrders() {
     try {
-        const [ordersRes, productsRes] = await Promise.all([fetch('/api/admin/orders'), fetch('/api/products')]);
+        const [ordersRes, productsRes] = await Promise.all([
+            fetch('/api/admin/orders'), 
+            fetch('/api/products')
+        ]);
         const allOrders = await ordersRes.json();
         const allProducts = await productsRes.json();
+        
         const myOrders = allOrders.filter(o => o.buyerId === userProfile.userId);
         document.getElementById("loading").style.display = "none";
 
@@ -57,11 +64,19 @@ async function fetchOrders() {
         }
 
         document.getElementById("order-list").innerHTML = myOrders.map(order => {
-            const product = allProducts.find(p => p.productCode === order.productCode);
+            // 💡 關鍵修正 1：強制轉型 String 確保 ID 比對成功
+            const product = allProducts.find(p => String(p.productCode) === String(order.productCode));
             
-            // 💡 邏輯修正：只要商品狀態是「上架」，且買家沒取消，就可以修改
-            // 不再檢查 order.status === '待點貨'
-            const isClosed = product && (product.status === '已結單' || product.status === '斷貨');
+            // 💡 關鍵修正 2：強化判定條件，預設為可修改
+            let isClosed = false;
+            if (product && product.status) {
+                const statusClean = product.status.trim(); // 去除隱形空格
+                // 只有明確標記為結單或斷貨時才鎖定
+                if (statusClean === '已結單' || statusClean === '斷貨') {
+                    isClosed = true;
+                }
+            }
+
             const isCanceled = order.status === '買家取消';
             const canModify = !isClosed && !isCanceled;
 
@@ -83,11 +98,18 @@ async function fetchOrders() {
                             <button class="btn-sm btn-edit" onclick="editOrder('${order.orderId}', ${order.qty}, ${order.price})">修改數量</button>
                             <button class="btn-sm btn-del" onclick="deleteOrder('${order.orderId}')">取消訂單</button>
                         </div>
-                    ` : `<div class="locked-msg">${isCanceled ? '訂單已取消' : '⚠️ 團主已結單，訂單鎖定中'}</div>`}
+                    ` : `
+                        <div class="locked-msg">
+                            ${isCanceled ? '❌ 訂單已取消' : '⚠️ 團主已結單，訂單鎖定中'}
+                        </div>
+                    `}
                 </div>
             `;
         }).join("");
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+        console.error("Fetch Error:", err);
+        document.getElementById("order-list").innerHTML = "讀取資料發生錯誤";
+    }
 }
 
 async function editOrder(orderId, oldQty, price) {
