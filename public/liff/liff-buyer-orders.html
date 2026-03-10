@@ -17,10 +17,10 @@
         .status-danger { color: #721c24; background: #f8d7da; }
         .order-name { font-weight: bold; font-size: 15px; margin-bottom: 5px; color: #333; }
         .order-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #eee; }
-        .btn-sm { padding: 6px 12px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; background: white; }
-        .btn-edit { color: var(--primary-color); border-color: var(--primary-color); }
-        .btn-del { color: var(--danger-color); border-color: var(--danger-color); }
-        .locked-msg { font-size: 11px; color: #aaa; text-align: right; margin-top: 10px; font-style: italic; }
+        .btn-sm { padding: 8px 16px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; font-weight: bold; }
+        .btn-edit { color: var(--primary-color); border-color: var(--primary-color); background: #fff; }
+        .btn-del { color: var(--danger-color); border-color: var(--danger-color); background: #fff; }
+        .locked-msg { font-size: 11px; color: #d9534f; text-align: right; margin-top: 10px; background: #fff1f0; padding: 5px; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -51,31 +51,39 @@ async function fetchOrders() {
         const myOrders = allOrders.filter(o => o.buyerId === userProfile.userId);
         document.getElementById("loading").style.display = "none";
 
+        if (myOrders.length === 0) {
+            document.getElementById("order-list").innerHTML = '<div style="text-align:center; color:#999; padding:50px;">目前尚無訂單紀錄</div>';
+            return;
+        }
+
         document.getElementById("order-list").innerHTML = myOrders.map(order => {
             const product = allProducts.find(p => p.productCode === order.productCode);
-            // 💡 邏輯修正：僅當商品狀態為「已結單」或「斷貨」時鎖定修改按鈕
-            const isProductClosed = product && (product.status === '已結單' || product.status === '斷貨');
-            const canAction = !isProductClosed && (order.status === '待點貨' || order.status === '新訂單');
+            
+            // 💡 邏輯修正：只要商品狀態是「上架」，且買家沒取消，就可以修改
+            // 不再檢查 order.status === '待點貨'
+            const isClosed = product && (product.status === '已結單' || product.status === '斷貨');
+            const isCanceled = order.status === '買家取消';
+            const canModify = !isClosed && !isCanceled;
 
             let statusClass = 'status-warning';
-            if (order.status === '已到貨') statusClass = 'status-success';
+            if (order.status === '已到貨' || order.status === '已收貨') statusClass = 'status-success';
             if (order.status === '斷貨' || order.status === '買家取消') statusClass = 'status-danger';
 
             return `
                 <div class="order-card">
                     <div class="order-header">
-                        <span style="font-size:12px; color:#777;">日期: ${order.orderDate || 'N/A'}</span>
+                        <span style="font-size:12px; color:#777;">單號: ${order.orderId.slice(-6)}</span>
                         <span class="order-status ${statusClass}">${order.status}</span>
                     </div>
-                    <div class="order-name">${order.productName || '未知商品'}</div>
-                    <div style="font-size:13px; color:#777;">規格: ${order.spec} / 數量: ${order.qty}</div>
-                    <div style="color:var(--price-color); font-weight:bold; margin-top:5px;">總計: $${order.total}</div>
-                    ${canAction ? `
+                    <div class="order-name">${order.productName}</div>
+                    <div style="font-size:13px; color:#666;">規格: ${order.spec} / 數量: ${order.qty}</div>
+                    <div style="color:var(--price-color); font-weight:bold; margin-top:5px; font-size:16px;">總計: $${order.total}</div>
+                    ${canModify ? `
                         <div class="order-footer">
                             <button class="btn-sm btn-edit" onclick="editOrder('${order.orderId}', ${order.qty}, ${order.price})">修改數量</button>
                             <button class="btn-sm btn-del" onclick="deleteOrder('${order.orderId}')">取消訂單</button>
                         </div>
-                    ` : `<div class="locked-msg">⚠️ 團主已結單或商品斷貨，訂單已鎖定</div>`}
+                    ` : `<div class="locked-msg">${isCanceled ? '訂單已取消' : '⚠️ 團主已結單，訂單鎖定中'}</div>`}
                 </div>
             `;
         }).join("");
@@ -84,7 +92,8 @@ async function fetchOrders() {
 
 async function editOrder(orderId, oldQty, price) {
     const newQty = prompt("請輸入新的數量:", oldQty);
-    if (!newQty || newQty == oldQty || isNaN(newQty) || newQty <= 0) return;
+    if (newQty === null || newQty == oldQty || isNaN(newQty) || newQty <= 0) return;
+    
     const res = await fetch(`/api/admin/orders/${orderId}/status`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ qty: parseInt(newQty), total: parseInt(newQty) * price, status: '待點貨' })
@@ -93,7 +102,7 @@ async function editOrder(orderId, oldQty, price) {
 }
 
 async function deleteOrder(orderId) {
-    if (!confirm("確定要取消嗎？")) return;
+    if (!confirm("確定要取消這筆訂單嗎？")) return;
     const res = await fetch(`/api/admin/orders/${orderId}/status`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: '買家取消' })
