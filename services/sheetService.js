@@ -135,4 +135,31 @@ export const sheetService = {
   },
 
   // 6. 取得特定商品的買家名單 (用於團主統計)
-  async
+  async getBuyersByProduct(productCode) {
+    const orders = await this.getOrders();
+    return orders
+      .filter(o => o.productCode === productCode && o.status !== '買家取消')
+      .map(o => ({ lineId: o.buyerId, buyerName: o.buyerName, qty: o.qty }));
+  },
+
+  // 7. 更新訂單狀態或數量 (買家修改用)
+  async updateOrderAndSplit(orderId, data) {
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:A' });
+    const rows = res.data.values || [];
+    const rowIndex = rows.findIndex(r => String(r[0]) === String(orderId)) + 1;
+    if (rowIndex <= 1) throw new Error("找不到該訂單 ID");
+
+    const updates = [];
+    if (data.status) updates.push({ range: `Orders!K${rowIndex}`, values: [[data.status]] });
+    if (data.qty) updates.push({ range: `Orders!G${rowIndex}`, values: [[data.qty]] });
+    if (data.total) updates.push({ range: `Orders!I${rowIndex}`, values: [[data.total]] });
+
+    if (updates.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({ 
+        spreadsheetId: SPREADSHEET_ID, 
+        resource: { data: updates, valueInputOption: 'USER_ENTERED' } 
+      });
+    }
+  }
+};
+export default sheetService;
