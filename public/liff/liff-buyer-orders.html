@@ -20,11 +20,12 @@
         .btn-sm { padding: 6px 12px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; background: white; }
         .btn-edit { color: var(--primary-color); border-color: var(--primary-color); }
         .btn-del { color: var(--danger-color); border-color: var(--danger-color); }
+        .locked-msg { font-size: 11px; color: #aaa; text-align: right; margin-top: 10px; font-style: italic; }
     </style>
 </head>
 <body>
     <div class="nav-bar">
-        <a href="liff-order.html" style="text-decoration:none; color:#666; margin-right:10px;">⬅ 返回商城</a>
+        <a href="liff-product-list.html" style="text-decoration:none; color:#666; margin-right:10px;">⬅ 返回商城</a>
         <h3 style="margin:0;">📋 我的訂單</h3>
     </div>
     <div id="loading" style="text-align:center; padding:50px;">正在讀取訂購紀錄...</div>
@@ -52,8 +53,9 @@ async function fetchOrders() {
 
         document.getElementById("order-list").innerHTML = myOrders.map(order => {
             const product = allProducts.find(p => p.productCode === order.productCode);
+            // 💡 邏輯修正：僅當商品狀態為「已結單」或「斷貨」時鎖定修改按鈕
             const isProductClosed = product && (product.status === '已結單' || product.status === '斷貨');
-            const canAction = !isProductClosed && order.status === '待點貨';
+            const canAction = !isProductClosed && (order.status === '待點貨' || order.status === '新訂單');
 
             let statusClass = 'status-warning';
             if (order.status === '已到貨') statusClass = 'status-success';
@@ -73,7 +75,7 @@ async function fetchOrders() {
                             <button class="btn-sm btn-edit" onclick="editOrder('${order.orderId}', ${order.qty}, ${order.price})">修改數量</button>
                             <button class="btn-sm btn-del" onclick="deleteOrder('${order.orderId}')">取消訂單</button>
                         </div>
-                    ` : `<div style="font-size:11px; color:#aaa; text-align:right; margin-top:10px;">⚠️ 訂單已鎖定或商品已結單</div>`}
+                    ` : `<div class="locked-msg">⚠️ 團主已結單或商品斷貨，訂單已鎖定</div>`}
                 </div>
             `;
         }).join("");

@@ -6,49 +6,46 @@
     <title>商品下單詳情</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        :root { --primary-color: #06c755; --price-color: #e44d26; }
+        :root { --primary-color: #06c755; --price-color: #e44d26; --urgent-color: #d9534f; }
         body { font-family: -apple-system, sans-serif; background: #fff; margin: 0; padding-bottom: 80px; }
         .nav-top { padding: 15px; display: flex; align-items: center; border-bottom: 1px solid #eee; position: sticky; top: 0; background: white; z-index: 10; }
         .back-btn { text-decoration: none; font-size: 20px; color: #333; margin-right: 15px; }
-        .media-box { width: 100%; background: #000; }
         .media-box img, .media-box iframe { width: 100%; aspect-ratio: 16 / 9; display: block; border: none; object-fit: cover; }
         .content-card { padding: 20px; }
-        .price-tag { font-size: 26px; color: var(--price-color); font-weight: bold; margin-bottom: 10px; }
+        .close-date-box { background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-weight: bold; font-size: 14px; text-align: center; }
+        .urgent { background: #f8d7da; border-color: #f5c6cb; color: var(--urgent-color); }
+        .price-tag { font-size: 26px; color: var(--price-color); font-weight: bold; margin-bottom: 5px; }
         .price-tag::before { content: "$"; font-size: 18px; margin-right: 2px; }
-        .product-title { font-size: 22px; font-weight: bold; line-height: 1.4; margin-bottom: 15px; color: #222; }
-        .selector-box { background: #f9f9f9; padding: 15px; border-radius: 12px; margin-top: 20px; border: 1px solid #f0f0f0; }
-        .spec-label { font-size: 13px; color: #888; margin-bottom: 8px; display: block; font-weight: bold; }
-        select, input { width: 100%; height: 48px; border: 1px solid #ddd; border-radius: 8px; padding: 0 12px; margin-bottom: 15px; font-size: 16px; box-sizing: border-box; }
+        .selector-box { background: #f9f9f9; padding: 15px; border-radius: 12px; margin-top: 15px; border: 1px solid #f0f0f0; }
+        select, input { width: 100%; height: 48px; border: 1px solid #ddd; border-radius: 8px; padding: 0 12px; margin-bottom: 12px; font-size: 16px; box-sizing: border-box; }
         .footer-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 16px; border-top: 1px solid #eee; display: flex; }
         .btn-submit { flex: 1; height: 50px; background: var(--primary-color); color: white; border: none; border-radius: 25px; font-size: 18px; font-weight: bold; cursor: pointer; }
         .btn-submit:disabled { background: #ccc; cursor: not-allowed; }
-        .section-title { font-weight: bold; margin-top: 20px; border-left: 4px solid var(--primary-color); padding-left: 10px; }
-        .description-box { margin-top: 10px; color: #555; line-height: 1.6; }
     </style>
 </head>
 <body>
     <div class="nav-top">
-        <a href="liff-order.html" class="back-btn">⬅</a>
+        <a href="liff-product-list.html" class="back-btn">⬅</a>
         <span style="font-weight:bold;">商品下單詳情</span>
     </div>
     <div id="mediaContainer" class="media-box"></div>
     <div class="content-card">
+        <div id="closeDateAlert" class="close-date-box" style="display:none;"></div>
         <div id="pPrice" class="price-tag">0</div>
-        <div id="pName" class="product-title">載入中...</div>
+        <div id="pName" style="font-size:20px; font-weight:bold; margin-bottom:15px;">載入中...</div>
+        
         <div class="selector-box">
             <div id="colorArea">
-                <span class="spec-label">選擇規格/顏色</span>
-                <select id="colorSel"><option value="">載入中...</option></select>
+                <span style="font-size:13px; color:#888;">選擇規格/顏色</span>
+                <select id="colorSel"><option value="">請選擇</option></select>
             </div>
             <div id="sizeArea">
-                <span class="spec-label">選擇尺寸</span>
-                <select id="sizeSel"><option value="">載入中...</option></select>
+                <span style="font-size:13px; color:#888;">選擇尺寸</span>
+                <select id="sizeSel"><option value="">請選擇</option></select>
             </div>
-            <span class="spec-label">購買數量</span>
+            <span style="font-size:13px; color:#888;">下單數量</span>
             <input type="number" id="qtyInput" value="1" min="1">
         </div>
-        <div class="section-title">商品介紹</div>
-        <div id="pDesc" class="description-box"></div>
     </div>
     <div class="footer-bar">
         <button id="submitBtn" class="btn-submit" onclick="submitOrder()">🛒 確認下單</button>
@@ -68,16 +65,23 @@ async function init() {
         const products = await res.json();
         product = products.find(p => p.productCode === code);
         if (product) render();
-        else alert("找不到商品資料");
     } catch (err) { console.error(err); }
 }
 
 function render() {
     document.getElementById('pName').innerText = product.productName;
     document.getElementById('pPrice').innerText = product.price;
-    document.getElementById('pDesc').innerText = product.description || "目前尚無詳細說明。";
 
-    // 影片與圖片處理
+    // 💡 結單日期醒目提醒
+    if (product.closeDate && product.closeDate !== '未設定') {
+        const alertBox = document.getElementById('closeDateAlert');
+        alertBox.innerText = `⏳ 本商品預計結單日：${product.closeDate}`;
+        alertBox.style.display = "block";
+        // 如果是今天結單，標紅醒目
+        const today = new Date().toISOString().split('T')[0];
+        if (product.closeDate <= today) alertBox.classList.add('urgent');
+    }
+
     const media = document.getElementById('mediaContainer');
     if (product.youtube) {
         const vid = product.youtube.includes('v=') ? product.youtube.split('v=')[1].split('&')[0] : product.youtube.split('/').pop();
@@ -89,10 +93,7 @@ function render() {
 
     const colorSel = document.getElementById('colorSel');
     const sizeSel = document.getElementById('sizeSel');
-    colorSel.innerHTML = '<option value="">請選擇顏色</option>';
-    sizeSel.innerHTML = '<option value="">請選擇尺寸</option>';
-
-    // --- 強化拆分邏輯：相容全形逗號 ---
+    
     if (product.specSize && product.specSize.includes('|')) {
         const parts = product.specSize.split('|');
         parts.forEach(part => {
@@ -124,9 +125,8 @@ async function submitOrder() {
     const isSizeVisible = document.getElementById('sizeArea').style.display !== 'none';
     const qty = parseInt(document.getElementById('qtyInput').value);
 
-    if (!color) return alert("請選擇顏色");
+    if (!color) return alert("請選擇規格/顏色");
     if (isSizeVisible && !size) return alert("請選擇尺寸");
-    if (!qty || qty < 1) return alert("請輸入正確數量");
 
     const payload = {
         buyerId: user.id, buyerName: user.name, productCode: product.productCode,
@@ -141,7 +141,7 @@ async function submitOrder() {
         const res = await fetch('/api/admin/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if (res.ok) { alert("✅ 下單成功！"); window.location.href = "liff-buyer-orders.html"; }
         else { alert("❌ 下單失敗"); btn.disabled = false; btn.innerText = "🛒 確認下單"; }
-    } catch (err) { alert("網路連線錯誤"); btn.disabled = false; }
+    } catch (err) { alert("網路錯誤"); btn.disabled = false; }
 }
 window.onload = init;
 </script>
