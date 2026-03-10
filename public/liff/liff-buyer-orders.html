@@ -17,18 +17,22 @@
         .status-danger { color: #721c24; background: #f8d7da; }
         .order-name { font-weight: bold; font-size: 15px; margin-bottom: 5px; color: #333; }
         .order-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #eee; }
-        .btn-sm { padding: 8px 16px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; font-weight: bold; }
+        .btn-sm { padding: 8px 16px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         .btn-edit { color: var(--primary-color); border-color: var(--primary-color); background: #fff; }
+        .btn-edit:active { background: var(--primary-color); color: white; }
         .btn-del { color: var(--danger-color); border-color: var(--danger-color); background: #fff; }
-        .locked-msg { font-size: 11px; color: #d9534f; text-align: right; margin-top: 10px; background: #fff1f0; padding: 5px; border-radius: 4px; }
+        .btn-del:active { background: var(--danger-color); color: white; }
+        .locked-msg { font-size: 11px; color: #d9534f; text-align: right; margin-top: 10px; background: #fff1f0; padding: 8px; border-radius: 6px; border: 1px solid #ffa39e; }
+        #loading { text-align: center; padding: 50px; color: #999; }
     </style>
 </head>
 <body>
     <div class="nav-bar">
-        <a href="liff-product-list.html" style="text-decoration:none; color:#666; margin-right:10px;">⬅ 返回商城</a>
-        <h3 style="margin:0;">📋 我的訂單</h3>
+        <a href="liff-product-list.html" style="text-decoration:none; color:#666; margin-right:10px; font-size: 20px;">⬅</a>
+        <h3 style="margin:0;">📋 我的訂購紀錄</h3>
     </div>
-    <div id="loading" style="text-align:center; padding:50px;">正在讀取訂購紀錄...</div>
+    
+    <div id="loading">🔍 正在讀取訂單資料...</div>
     <div id="order-list"></div>
 
 <script>
@@ -37,20 +41,24 @@ let userProfile = null;
 async function init() {
     try {
         await liff.init({ liffId: "2008857998-jbKsKkPY" });
-        if (!liff.isLoggedIn()) { liff.login(); return; }
+        if (!liff.isLoggedIn()) { 
+            liff.login(); 
+            return; 
+        }
         userProfile = await liff.getProfile();
         fetchOrders();
     } catch (err) { 
-        document.getElementById("loading").innerText = "載入失敗"; 
-        console.error(err);
+        document.getElementById("loading").innerText = "LIFF 初始化失敗";
+        console.error(err); 
     }
 }
 
 async function fetchOrders() {
     try {
+        // 加上時間戳 t=... 強制避開瀏覽器快取，確保看到最新狀態
         const [ordersRes, productsRes] = await Promise.all([
-            fetch('/api/admin/orders'), 
-            fetch('/api/products')
+            fetch('/api/admin/orders?t=' + Date.now()),
+            fetch('/api/products?t=' + Date.now())
         ]);
         const allOrders = await ordersRes.json();
         const allProducts = await productsRes.json();
@@ -64,21 +72,27 @@ async function fetchOrders() {
         }
 
         document.getElementById("order-list").innerHTML = myOrders.map(order => {
-            // 💡 關鍵修正 1：強制轉型 String 確保 ID 比對成功
+            // 預設為可以修改
+            let canModify = true;
+            let lockReason = "";
+
+            // 尋找對應商品狀態
             const product = allProducts.find(p => String(p.productCode) === String(order.productCode));
             
-            // 💡 關鍵修正 2：強化判定條件，預設為可修改
-            let isClosed = false;
+            // 💡 終極邏輯：只有明確偵測到「已結單」或「斷貨」才鎖定
             if (product && product.status) {
-                const statusClean = product.status.trim(); // 去除隱形空格
-                // 只有明確標記為結單或斷貨時才鎖定
-                if (statusClean === '已結單' || statusClean === '斷貨') {
-                    isClosed = true;
+                const s = product.status.trim();
+                if (s === '已結單' || s === '斷貨') {
+                    canModify = false;
+                    lockReason = "⚠️ 團主已結單，訂單鎖定中";
                 }
             }
 
-            const isCanceled = order.status === '買家取消';
-            const canModify = !isClosed && !isCanceled;
+            // 若買家已取消
+            if (order.status === '買家取消') {
+                canModify = false;
+                lockReason = "❌ 您已取消此筆訂單";
+            }
 
             let statusClass = 'status-warning';
             if (order.status === '已到貨' || order.status === '已收貨') statusClass = 'status-success';
@@ -93,22 +107,21 @@ async function fetchOrders() {
                     <div class="order-name">${order.productName}</div>
                     <div style="font-size:13px; color:#666;">規格: ${order.spec} / 數量: ${order.qty}</div>
                     <div style="color:var(--price-color); font-weight:bold; margin-top:5px; font-size:16px;">總計: $${order.total}</div>
+                    
                     ${canModify ? `
                         <div class="order-footer">
                             <button class="btn-sm btn-edit" onclick="editOrder('${order.orderId}', ${order.qty}, ${order.price})">修改數量</button>
                             <button class="btn-sm btn-del" onclick="deleteOrder('${order.orderId}')">取消訂單</button>
                         </div>
                     ` : `
-                        <div class="locked-msg">
-                            ${isCanceled ? '❌ 訂單已取消' : '⚠️ 團主已結單，訂單鎖定中'}
-                        </div>
+                        <div class="locked-msg">${lockReason}</div>
                     `}
                 </div>
             `;
         }).join("");
     } catch (err) { 
         console.error("Fetch Error:", err);
-        document.getElementById("order-list").innerHTML = "讀取資料發生錯誤";
+        document.getElementById("order-list").innerHTML = "連線失敗，請稍後再試";
     }
 }
 
@@ -116,21 +129,32 @@ async function editOrder(orderId, oldQty, price) {
     const newQty = prompt("請輸入新的數量:", oldQty);
     if (newQty === null || newQty == oldQty || isNaN(newQty) || newQty <= 0) return;
     
-    const res = await fetch(`/api/admin/orders/${orderId}/status`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qty: parseInt(newQty), total: parseInt(newQty) * price, status: '待點貨' })
-    });
-    if (res.ok) fetchOrders();
+    try {
+        const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+            method: 'PUT', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                qty: parseInt(newQty), 
+                total: parseInt(newQty) * price, 
+                status: '待點貨' 
+            })
+        });
+        if (res.ok) fetchOrders();
+    } catch (e) { alert("修改失敗，請檢查網路"); }
 }
 
 async function deleteOrder(orderId) {
     if (!confirm("確定要取消這筆訂單嗎？")) return;
-    const res = await fetch(`/api/admin/orders/${orderId}/status`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: '買家取消' })
-    });
-    if (res.ok) fetchOrders();
+    try {
+        const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+            method: 'PUT', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: '買家取消' })
+        });
+        if (res.ok) fetchOrders();
+    } catch (e) { alert("取消失敗"); }
 }
+
 window.onload = init;
 </script>
 </body>
