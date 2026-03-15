@@ -1,51 +1,29 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
-<meta charset="utf-8">
-<title>現貨出清</title>
-<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <meta charset="UTF-8"><title>🔥 現貨出清</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
-<body>
-<h2>🔥 現貨出清（先到先買）</h2>
-<div id="list"></div>
-
+<body style="font-family:sans-serif; padding:15px; background:#fff5f5;">
+  <h2 style="text-align:center; color:#e53e3e;">🔥 限時現貨出清</h2>
+  <div id="list">載入中...</div>
 <script>
-let user;
-
-liff.init({ liffId: "2008857998-LKw8W2JA" }).then(async () => {
-  user = await liff.getProfile();
-  load();
-});
-
-async function load() {
-  const res = await fetch("/api/overstock/buyer");
-  const items = await res.json();
-
-  document.getElementById("list").innerHTML =
-    items.map(i => `
-      <div>
-        <b>${i.product_name}</b><br>
-        ${i.color} ${i.size}<br>
-        $${i.price}（剩 ${i.qty}）<br>
-        <button onclick="buy('${i.overstock_id}')">立即購買</button>
-      </div><hr>
-    `).join("");
-}
-
-async function buy(id) {
-  const res = await fetch("/api/overstock/buyer/order", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      overstockId: id,
-      buyerId: user.userId,
-      buyerName: user.displayName
-    })
-  });
+async function init() {
+  await liff.init({ liffId: "2008857998-LKw8W2JA" });
+  const res = await fetch("/api/products");
   const data = await res.json();
-  alert(data.ok ? "購買成功" : data.error);
-  load();
+  // 顯示標記為「現貨」且尚有庫存的商品
+  document.getElementById("list").innerHTML = data.filter(p => p.isStock === true).map(p => `
+    <div style="background:white; padding:15px; border-radius:10px; margin-bottom:10px; border:2px solid #feb2b2;">
+      <strong>${p.productName}</strong><br>
+      <span style="color:#e53e3e; font-weight:bold; font-size:20px;">$${p.price}</span>
+      <button onclick="location.href='liff-product-detail.html?code=${p.productCode}'" style="float:right; background:#e53e3e; color:white; border:none; padding:10px 15px; border-radius:5px;">立即搶購</button>
+      <div style="clear:both; font-size:12px; color:#666; margin-top:5px;">剩餘庫存: ${p.stock || 0}</div>
+    </div>
+  `).join("") || "目前暫無現貨商品";
 }
+window.onload = init;
 </script>
 </body>
 </html>

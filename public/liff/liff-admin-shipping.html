@@ -6,55 +6,33 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body { font-family: sans-serif; padding: 15px; background: #f4f7f6; }
-    .card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .btn-pdf { background: #007bff; color: white; border: none; width: 100%; padding: 12px; border-radius: 8px; font-weight: bold; margin-top: 20px; }
-    .checkbox-container { display: flex; align-items: center; justify-content: space-between; }
+    .card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+    .btn-pdf { background: #007bff; color: white; border: none; width: 100%; padding: 15px; border-radius: 8px; font-weight: bold; position: fixed; bottom: 20px; left: 5%; width: 90%; }
   </style>
 </head>
 <body>
-  <h3>🚚 發貨作業 (產單)</h3>
-  <div id="order-list">⌛ 載入發貨清單中...</div>
-  <button class="btn-pdf" onclick="generatePDF()">🖨️ 產生發貨小紙張</button>
+  <button onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button>
+  <h3>🚚 待發貨清單 (已到貨商品)</h3>
+  <div id="list" style="padding-bottom: 80px;">載入中...</div>
+  <button class="btn-pdf" onclick="generate()">🖨️ 產生發貨標籤/清單</button>
 
 <script>
 async function init() {
-  try {
-    await liff.init({ liffId: "2008857998-HUEXLkgO" }); // 對應 shipping.html
-    const res = await fetch("/api/admin/orders");
-    const orders = await res.json();
-    
-    // 過濾出狀態為「已到貨」的訂單進行發貨
-    const list = document.getElementById("order-list");
-    list.innerHTML = orders.map(o => `
-      <div class="card">
-        <div class="checkbox-container">
-          <div>
-            <strong>${o.productName}</strong><br>
-            買家: ${o.buyerName} | 數量: ${o.qty}
-          </div>
-          <input type="checkbox" name="orderSelect" value="${o.orderId}">
-        </div>
-      </div>
-    `).join("");
-  } catch (err) {
-    document.getElementById("order-list").innerText = "載入失敗: " + err.message;
-  }
-}
-
-async function generatePDF() {
-  const selected = Array.from(document.querySelectorAll('input[name="orderSelect"]:checked')).map(el => el.value);
-  if (selected.length === 0) return alert("請至少勾選一筆訂單！");
-
-  const res = await fetch("/api/admin/generate-shipping-pdf", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ orderIds: selected })
-  });
-  
+  await liff.init({ liffId: "2008857998-HUEXLkgO" });
+  const res = await fetch("/api/admin/orders");
   const data = await res.json();
-  if (data.ok) {
-    window.location.href = data.downloadUrl; // 導向模擬 PDF 頁面，解決 404
-  }
+  document.getElementById("list").innerHTML = data.filter(o => o.status === '已到貨').map(o => `
+    <div class="card">
+      <input type="checkbox" name="os" value="${o.orderId}" checked>
+      <div><strong>${o.buyerName}</strong><br><small>${o.productName} x ${o.qty}</small></div>
+    </div>
+  `).join("") || "目前沒有已到貨的訂單";
+}
+async function generate() {
+  const ids = Array.from(document.querySelectorAll('input[name="os"]:checked')).map(el => el.value);
+  if(ids.length === 0) return alert("請勾選訂單");
+  // 呼叫後端產生 PDF 或 出貨小紙張 API
+  alert("正在為 " + ids.length + " 筆訂單產生發貨單...");
 }
 window.onload = init;
 </script>

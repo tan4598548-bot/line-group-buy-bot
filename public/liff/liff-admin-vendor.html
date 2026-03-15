@@ -1,79 +1,30 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <title>廠商採購管理</title>
+  <meta charset="UTF-8"><title>廠商採購管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body { font-family: sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
-    .nav-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-    .vendor-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .qty-box { background: #eef2f7; padding: 10px; border-radius: 4px; margin: 10px 0; font-size: 14px; }
-    .status-tag { float: right; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-    .status-wait { background: #fff3cd; color: #856404; }
-    .status-done { background: #d4edda; color: #155724; }
-    .btn-sync { background: #6f42c1; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-    .btn-back { background: #6c757d; color: white; padding: 8px 12px; border-radius: 4px; text-decoration: none; font-size: 14px; }
+    .vendor-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 12px; }
+    .qty-box { background: #eef2f7; padding: 10px; border-radius: 4px; margin: 10px 0; }
   </style>
 </head>
 <body>
-  <div class="nav-bar">
-    <a href="liff-admin-dashboard.html" class="btn-back">⬅ 返回中心</a>
-    <h3 style="margin:0;">🚚 廠商採購管理</h3>
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <button onclick="location.href='liff-admin-dashboard.html'">⬅</button>
+    <h3>🏢 廠商採購管理</h3>
   </div>
-
-  <div id="vendor-list">載入採購清單中...</div>
+  <div id="vendor-list">載入中...</div>
 
 <script>
 async function init() {
-  try {
-    await liff.init({ liffId: "2008857998-481MeChx" });
-    fetchVendorData();
-  } catch (err) { console.error(err); }
+  await liff.init({ liffId: "2008857998-481MeChx" });
+  const res = await fetch("/api/admin/orders"); // 示範：從訂單彙整
+  const orders = await res.json();
+  // 這裡應對接後端 Vendor 彙整 API
+  document.getElementById("vendor-list").innerHTML = "目前直接於試算表 VendorOrders 分頁查看彙整結果";
 }
-
-async function fetchVendorData() {
-  const res = await fetch("/api/admin/vendor");
-  const data = await res.json();
-  const list = document.getElementById("vendor-list");
-  
-  if (data.length === 0) {
-    list.innerHTML = `<div style="text-align:center; color:#999; margin-top:50px;">
-      目前廠商表無資料<br><br>
-      <button class="btn-sync" onclick="syncAll()">從訂單彙整採購需求</button>
-    </div>`;
-    return;
-  }
-
-  list.innerHTML = data.map(v => `
-    <div class="vendor-card">
-      <span class="status-tag ${v.status === '已到貨' ? 'status-done' : 'status-wait'}">${v.status}</span>
-      <strong>${v.name}</strong> <small>(${v.code})</small>
-      <div class="qty-box">
-        採購總數：<b>${v.targetQty}</b><br>
-        實際到貨：<b>${v.arrivedQty}</b>
-      </div>
-      <div style="display:flex; gap:10px;">
-        <button class="btn-sync" onclick="syncOne('${v.code}')">🔄 重新同步訂單</button>
-        <button style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px;" onclick="updateArrival('${v.code}')">更新到貨數</button>
-      </div>
-    </div>
-  `).join("");
-}
-
-async function syncOne(code) {
-  const res = await fetch(`/api/admin/vendor/sync/${code}`, { method: 'POST' });
-  if (res.ok) { alert("採購數更新成功"); fetchVendorData(); }
-}
-
-async function updateArrival(code) {
-  const qty = prompt("請輸入實際到貨數量：");
-  if (qty === null) return;
-  // 此處對接您後端更新 Vendor 實際到貨數的 API
-  alert("功能開發中，請先於試算表手動更新。");
-}
-
 window.onload = init;
 </script>
 </body>

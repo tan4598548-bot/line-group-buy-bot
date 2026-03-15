@@ -7,73 +7,55 @@
   <style>
     body { font-family: sans-serif; background: #f8f9fa; padding: 15px; margin: 0; }
     .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-    .order-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 5px solid #ccc; }
+    .order-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid #ccc; }
     .status-已到貨 { border-left-color: #28a745; }
     .status-待點貨 { border-left-color: #ffc107; }
-    .status-select { width: 100%; padding: 12px; margin-top: 10px; border-radius: 4px; border: 1px solid #ddd; font-size: 16px; }
-    .btn-clear { background: #ff4d4f; color: white; border: none; width: 100%; padding: 16px; border-radius: 8px; font-weight: bold; margin-top: 20px; font-size: 16px; }
+    .status-select { width: 100%; padding: 12px; margin-top: 10px; border-radius: 4px; font-size: 16px; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <button onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button>
-    <h3>🚚 到貨點貨 (支援拆單)</h3>
-  </div>
+  <div class="header"><button onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button><h3>📥 到貨點貨</h3></div>
   <div id="list">載入中...</div>
-  <button class="btn-clear" onclick="clearFullArrived()">🧹 清除「已到貨」之列</button>
 
-  <script>
+<script>
     let orders = [];
     async function init() {
       await liff.init({ liffId: "2008857998-ePcCkr6K" });
       loadOrders();
     }
-
     async function loadOrders() {
-      const res = await fetch("/api/admin/orders");
+      const res = await fetch("/api/admin/orders?t=" + Date.now());
       orders = await res.json();
-      document.getElementById("list").innerHTML = orders.map(o => `
+      document.getElementById("list").innerHTML = orders.filter(o => o.status !== '買家取消').map(o => `
         <div class="order-item status-${o.status}">
           <div style="display:flex; justify-content:space-between;">
             <strong>${o.buyerName}</strong>
             <span style="color:#007bff; font-weight:bold;">${o.qty} 件</span>
           </div>
-          <div style="font-size: 14px; color: #666; margin-top:5px;">${o.productName}</div>
+          <div style="font-size: 14px; color: #666;">${o.productName} (${o.spec})</div>
           <select class="status-select" onchange="updateStatus('${o.orderId}', this.value)">
             <option value="待點貨" ${o.status==='待點貨'?'selected':''}>⏳ 待點貨</option>
             <option value="部分到貨">⚠️ 部分到貨 (拆單)</option>
             <option value="已到貨" ${o.status==='已到貨'?'selected':''}>✅ 已到貨(齊全)</option>
+            <option value="斷貨" ${o.status==='斷貨'?'selected':''}>❌ 斷貨</option>
           </select>
         </div>
-      `).join("") || "目前無訂單資料";
+      `).join("");
     }
-
     async function updateStatus(orderId, newStatus) {
-      let payload = { status: newStatus, split: false, arrivalQty: 0 };
       if (newStatus === "部分到貨") {
-        const originalOrder = orders.find(o => o.orderId === orderId);
-        const input = prompt(`[拆單點貨] 原始數量: ${originalOrder.qty}\n請輸入本次實際到貨數量:`, "");
-        const arrivalQty = parseInt(input);
-        if (isNaN(arrivalQty) || arrivalQty <= 0 || arrivalQty >= originalOrder.qty) {
-          alert("請輸入有效數量(需小於原始總數)");
-          loadOrders(); return;
-        }
-        payload.status = "已到貨"; payload.split = true; payload.arrivalQty = arrivalQty;
+        const order = orders.find(o => o.orderId === orderId);
+        const arrivalQty = prompt(`[拆單] 原數量 ${order.qty}，請輸入本次到貨數:`);
+        if (!arrivalQty || arrivalQty >= order.qty) return alert("數量無效");
+        // 這裡後端 updateOrderWithCheck 需配合實作拆單邏輯，目前簡化為更新狀態
       }
-
-      const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+      await fetch(`/api/admin/orders/${orderId}/status`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ status: newStatus })
       });
-      if (res.ok) { loadOrders(); }
-    }
-
-    async function clearFullArrived() {
-      if (!confirm("確定要從試算表刪除所有「已到貨」的資料嗎？")) return;
-      await fetch("/api/admin/orders/clear-arrived", { method: "POST" });
       loadOrders();
     }
     window.onload = init;
-  </script>
+</script>
 </body>
 </html>

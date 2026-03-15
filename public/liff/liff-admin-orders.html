@@ -1,79 +1,36 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <title>訂單管理</title>
+  <meta charset="UTF-8"><title>訂單管理</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body { font-family: sans-serif; padding: 15px; background: #f4f4f7; }
     .nav { margin-bottom: 15px; } .btn-back { color: #007bff; text-decoration: none; font-weight: bold; }
     .order-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    .error-box { background: #fee; border: 1px solid #fcc; color: #c33; padding: 15px; border-radius: 8px; margin-top: 10px; }
+    .status-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; float: right; background: #eee; }
   </style>
 </head>
 <body>
   <div class="nav"><a href="liff-admin-dashboard.html" class="btn-back">❮ 返回管理中心</a></div>
-  <h3>📑 訂單管理 (測試版)</h3>
-  <div id="status">⚙️ 正在初始化...</div>
-  <div id="list"></div>
+  <h3>📑 完整訂單清單</h3>
+  <div id="list">載入中...</div>
 
-  <script>
-    async function init() {
-      const status = document.getElementById("status");
-      try {
-        // 對齊圖片中「我的商品詳細」ID
-        await liff.init({ liffId: "2008857998-wtK5loPp" });
-        
-        if (!liff.isLoggedIn()) {
-          liff.login();
-          return;
-        }
-
-        const profile = await liff.getProfile();
-        const userId = profile.userId;
-        status.innerText = "📡 正在請求 API...";
-
-        // 修正點：使用絕對路徑防止路徑偏移，並加入快取清除
-        const apiUrl = window.location.origin + "/api/admin/orders";
-        console.log("Fetching:", apiUrl);
-
-        const res = await fetch(apiUrl, {
-          method: "GET",
-          headers: {
-            "Accept": "application/json",
-            "x-liff-user-id": userId
-          }
-        });
-
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`API 報錯 ${res.status}: ${errText}`);
-        }
-
-        const data = await res.json();
-        status.style.display = "none";
-
-        if (!data || data.length === 0) {
-          document.getElementById("list").innerHTML = "目前暫無訂單資料。";
-          return;
-        }
-
-        document.getElementById("list").innerHTML = data.map(o => `
-          <div class="order-card">
-            <strong>${o.productName || '商品'}</strong><br>
-            <small>買家: ${o.buyerName} | 數量: ${o.qty}</small>
-          </div>
-        `).join("");
-
-      } catch (err) {
-        status.style.display = "none";
-        // 強制彈窗，抓出前端隱藏的錯誤
-        alert("錯誤偵測: " + err.message);
-        document.getElementById("list").innerHTML = `<div class="error-box">⚠️ ${err.message}</div>`;
-      }
-    }
-    window.onload = init;
-  </script>
+<script>
+async function init() {
+  await liff.init({ liffId: "2008857998-wtK5loPp" });
+  const res = await fetch("/api/admin/orders?t=" + Date.now());
+  const data = await res.json();
+  document.getElementById("list").innerHTML = data.map(o => `
+    <div class="order-card">
+      <span class="status-badge">${o.status}</span>
+      <strong>${o.productName}</strong><br>
+      <small>買家: ${o.buyerName} | 規格: ${o.spec} | 數量: ${o.qty}</small>
+      <div style="text-align:right; color:#e44d26; font-weight:bold;">$${o.total}</div>
+    </div>
+  `).join("") || "目前尚無訂單";
+}
+window.onload = init;
+</script>
 </body>
 </html>
