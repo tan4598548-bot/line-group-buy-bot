@@ -1,55 +1,36 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8"><title>到貨點貨</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <style>
-    body { font-family: sans-serif; background: #f8f9fa; padding: 15px; }
-    .order-card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 12px; border-left: 5px solid #ffc107; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .arrived { border-left-color: #28a745; opacity: 0.8; }
-    .row { display: flex; justify-content: space-between; align-items: center; }
-    select { width: 100%; height: 45px; margin-top: 10px; border-radius: 6px; border: 1px solid #ddd; }
-  </style>
+    <meta charset="UTF-8">
+    <title>團主管理後台</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .card { background: white; border-radius: 12px; padding: 25px 10px; text-align: center; text-decoration: none; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .card:active { background: #e9ecef; }
+        .icon { font-size: 32px; margin-bottom: 8px; display: block; }
+        .title { font-weight: bold; font-size: 14px; }
+        .header { margin-bottom: 25px; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+    </style>
 </head>
 <body>
-  <div class="row"><button onclick="location.href='liff-admin-dashboard.html'">⬅</button><h3>📥 點貨作業</h3></div>
-  <div id="list">載入中...</div>
-
-<script>
-let orders = [];
-async function init() {
-  await liff.init({ liffId: "2008857998-ePcCkr6K" });
-  load();
-}
-async function load() {
-  const res = await fetch("/api/admin/orders?t="+Date.now());
-  orders = await res.json();
-  document.getElementById("list").innerHTML = orders.filter(o => o.status !== '買家取消').map(o => `
-    <div class="order-card ${o.status==='已到貨'?'arrived':''}">
-      <div class="row"><strong>${o.buyerName}</strong> <span style="color:#007bff;">${o.qty}件</span></div>
-      <div style="font-size:14px; color:#666;">${o.productName} (${o.spec})</div>
-      <select onchange="update('${o.orderId}', this.value)">
-        <option value="待點貨" ${o.status==='待點貨'?'selected':''}>⏳ 待點貨</option>
-        <option value="已到貨" ${o.status==='已到貨'?'selected':''}>✅ 全齊到貨</option>
-        <option value="部分到貨">⚠️ 部分到貨 (拆單)</option>
-        <option value="斷貨" ${o.status==='斷貨'?'selected':''}>❌ 斷貨</option>
-      </select>
+    <div class="header"><h2>📊 系統管理選單</h2></div>
+    <div class="grid">
+        <a href="liff-admin-products.html" class="card"><span class="icon">📦</span><span class="title">1. 商品管理</span></a>
+        <a href="liff-admin-orders.html" class="card"><span class="icon">🔍</span><span class="title">2. 訂單查詢</span></a>
+        <a href="liff-admin-arrival.html" class="card"><span class="icon">📥</span><span class="title">3. 到貨/點貨</span></a>
+        <a href="liff-admin-shipping.html" class="card"><span class="icon">🚚</span><span class="title">4. 發貨作業</span></a>
+        <a href="liff-admin-vendor.html" class="card"><span class="icon">🏢</span><span class="title">5. 廠商管理</span></a>
+        <a href="liff-admin-settings.html" class="card"><span class="icon">⚙️</span><span class="title">6. 系統設定</span></a>
     </div>
-  `).join("") || "尚無訂單";
-}
-async function update(id, st) {
-  let payload = { status: st };
-  if(st === "部分到貨") {
-    const o = orders.find(x => x.orderId === id);
-    const qty = prompt(`[拆單點貨] 原始數量:${o.qty}\n請輸入本次實際到貨數量:`);
-    if(!qty || parseInt(qty) >= o.qty || parseInt(qty) <= 0) return alert("數量無效");
-    payload.status = "已到貨"; payload.split = true; payload.arrivalQty = parseInt(qty);
-  }
-  await fetch(`/api/admin/orders/${id}/status`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
-  load();
-}
-window.onload = init;
+<script>
+    async function init() {
+        await liff.init({ liffId: "2008857998-AoqmEajq" });
+        if (!liff.isLoggedIn()) { liff.login(); }
+    }
+    window.onload = init;
 </script>
 </body>
 </html>

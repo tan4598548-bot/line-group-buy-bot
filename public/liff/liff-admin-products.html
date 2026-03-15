@@ -1,101 +1,69 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8"><title>商品管理中心</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <style>
-    body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
-    .nav-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-    .product-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 5px solid #007bff; }
-    .status-badge { float: right; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-    .active { background: #d4edda; color: #155724; }
-    .closed { background: #fff3cd; color: #856404; }
-    .out { background: #f8d7da; color: #721c24; }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; }
-    .btn { flex: 1; min-width: 70px; padding: 10px; border: none; border-radius: 4px; font-weight: bold; font-size: 13px; }
-    .btn-edit { background: #007bff; color: white; }
-    .btn-close { background: #6c757d; color: white; }
-    .btn-out { background: #f39c12; color: white; }
-    #editModal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; justify-content:center; align-items:center; }
-    .modal-content { background:white; padding:20px; border-radius:8px; width:90%; max-height:80vh; overflow-y:auto; }
-    input { width:100%; padding:12px; margin: 8px 0; border:1px solid #ddd; border-radius:4px; box-sizing:border-box; }
-  </style>
+    <meta charset="UTF-8"><title>商品管理</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        .p-card { background:white; margin-bottom:15px; padding:15px; border-radius:10px; border-left:5px solid #007bff; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
+        .status { float:right; padding:2px 8px; border-radius:4px; font-size:12px; }
+        .st-上架 { background:#d4edda; color:#155724; }
+        .st-已結單 { background:#fff3cd; color:#856404; }
+        .st-斷貨 { background:#f8d7da; color:#721c24; }
+        .btns { display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; border-top:1px solid #eee; padding-top:10px; }
+        button { flex:1; padding:8px; border-radius:4px; border:1px solid #ddd; background:#fff; font-size:12px; }
+        .btn-add { width:100%; background:#007bff; color:white; padding:12px; margin-bottom:20px; font-weight:bold; }
+    </style>
 </head>
 <body>
-  <div class="nav-bar">
-    <a href="liff-admin-dashboard.html" style="text-decoration:none; color:#666;">⬅ 返回中心</a>
-    <button onclick="location.href='liff-admin-add-product.html'" style="background:#28a745; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold;">+ 新增商品</button>
-  </div>
-  <div id="product-list">載入中...</div>
-
-  <div id="editModal">
-    <div class="modal-content">
-      <h3>修正商品資訊</h3>
-      <input type="hidden" id="editCode">
-      <label>商品名稱</label><input type="text" id="editName">
-      <label>單價</label><input type="number" id="editPrice">
-      <label>結單日</label><input type="date" id="editDate">
-      <div style="display:flex; gap:10px; margin-top:20px;">
-        <button class="btn" onclick="closeModal()" style="background:#eee;">取消</button>
-        <button class="btn" onclick="saveEdit()" style="background:#00b900; color:white;">儲存更新</button>
-      </div>
-    </div>
-  </div>
+    <button onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button>
+    <h3>📦 商品管理 (1)</h3>
+    <button class="btn-add" onclick="location.href='liff-admin-add-product.html'">➕ 上架新商品</button>
+    <div id="list">載入中...</div>
 
 <script>
-let products = [];
-async function init() {
-  await liff.init({ liffId: "2008857998-AoqmEajq" }); 
-  fetchData();
-}
-
-async function fetchData() {
-  const res = await fetch("/api/products?t=" + Date.now());
-  products = await res.json();
-  document.getElementById("product-list").innerHTML = products.map(p => `
-    <div class="product-card">
-      <span class="status-badge ${p.status==='已結單'?'closed':p.status==='斷貨'?'out':'active'}">${p.status||'上架'}</span>
-      <strong>${p.productName}</strong><br>
-      <small>代碼: ${p.productCode} | 價格: $${p.price}</small>
-      <div class="actions">
-        <button class="btn btn-edit" onclick="openEdit('${p.productCode}')">修正</button>
-        <button class="btn btn-close" onclick="updateStatus('${p.productCode}', '已結單')">結單</button>
-        <button class="btn btn-out" onclick="markOutOfStock('${p.productCode}', '${p.productName}')">斷貨</button>
-      </div>
-    </div>
-  `).join("");
-}
-
-function openEdit(code) {
-  const p = products.find(i => i.productCode === code);
-  document.getElementById("editCode").value = p.productCode;
-  document.getElementById("editName").value = p.productName;
-  document.getElementById("editPrice").value = p.price;
-  document.getElementById("editDate").value = p.closeDate || "";
-  document.getElementById("editModal").style.display = "flex";
-}
-
-function closeModal() { document.getElementById("editModal").style.display = "none"; }
-
-async function saveEdit() {
-  const code = document.getElementById("editCode").value;
-  const payload = { productName: document.getElementById("editName").value, price: document.getElementById("editPrice").value, closeDate: document.getElementById("editDate").value };
-  await fetch("/api/products/" + code, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-  closeModal(); fetchData();
-}
-
-async function updateStatus(code, status) {
-  await fetch("/api/products/" + code, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: status }) });
-  fetchData();
-}
-
-async function markOutOfStock(code, name) {
-  if(!confirm(`發送「${name}」斷貨通知並下架？`)) return;
-  await fetch('/api/admin/products/out-of-stock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ productCode: code, productName: name }) });
-  fetchData();
-}
-window.onload = init;
+    let products = [];
+    async function init() {
+        await liff.init({ liffId: "2008857998-AoqmEajq" });
+        load();
+    }
+    async function load() {
+        const res = await fetch("/api/products?t="+Date.now());
+        products = await res.json();
+        document.getElementById("list").innerHTML = products.map(p => {
+            const isExpired = p.closeDate && new Date(p.closeDate) < new Date();
+            const displayStatus = isExpired ? "已結單" : (p.status || "上架");
+            return `
+            <div class="p-card">
+                <span class="status st-${displayStatus}">${displayStatus}</span>
+                <strong>${p.productName}</strong><br>
+                <small>代碼: ${p.productCode} / 價格: $${p.price} / 成本: $${p.cost || '未設'}</small><br>
+                <small>結單日: ${p.closeDate || '未設'}</small>
+                <div class="btns">
+                    <button onclick="location.href='liff-admin-edit-product.html?code=${p.productCode}'">修正/編輯</button>
+                    <button onclick="updateStatus('${p.productCode}', '已結單')">手動結單</button>
+                    <button onclick="markOutOfStock('${p.productCode}')" style="color:red">斷貨回報</button>
+                    <button onclick="delProduct('${p.productCode}')">刪除</button>
+                </div>
+            </div>`;
+        }).join("");
+    }
+    async function updateStatus(code, status) {
+        if(!confirm(`確定將此商品設為 ${status}?`)) return;
+        await fetch(`/api/products/${code}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status}) });
+        load();
+    }
+    async function markOutOfStock(code) {
+        if(!confirm("確定標記斷貨？系統將發送通知給所有訂購者。")) return;
+        await fetch(`/api/admin/products/out-of-stock`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({productCode:code}) });
+        load();
+    }
+    async function delProduct(code) {
+        if(!confirm("確定刪除此商品？")) return;
+        await fetch(`/api/products/${code}`, { method:'DELETE' });
+        load();
+    }
+    window.onload = init;
 </script>
 </body>
 </html>
