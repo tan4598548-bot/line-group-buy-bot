@@ -9,7 +9,7 @@
         :root { --primary-color: #06c755; --danger-color: #dc3545; --bg: #f8f9fa; --price-color: #e44d26; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; }
         .nav-bar { display: flex; align-items: center; margin-bottom: 20px; }
-        .order-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .order-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #eee; }
         .order-header { display: flex; justify-content: space-between; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px; margin-bottom: 10px; }
         .order-status { font-size: 12px; font-weight: bold; padding: 2px 8px; border-radius: 4px; background: #e9ecef; }
         .status-warning { color: #856404; background: #fff3cd; } 
@@ -17,12 +17,10 @@
         .status-danger { color: #721c24; background: #f8d7da; }
         .order-name { font-weight: bold; font-size: 15px; margin-bottom: 5px; color: #333; }
         .order-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #eee; }
-        .btn-sm { padding: 8px 16px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-sm { padding: 8px 16px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; font-weight: bold; transition: 0.2s; text-decoration: none; display: inline-block; }
         .btn-edit { color: var(--primary-color); border-color: var(--primary-color); background: #fff; }
-        .btn-edit:active { background: var(--primary-color); color: white; }
         .btn-del { color: var(--danger-color); border-color: var(--danger-color); background: #fff; }
-        .btn-del:active { background: var(--danger-color); color: white; }
-        .locked-msg { font-size: 11px; color: #d9534f; text-align: right; margin-top: 10px; background: #fff1f0; padding: 8px; border-radius: 6px; border: 1px solid #ffa39e; }
+        .locked-msg { font-size: 12px; color: #d9534f; text-align: center; margin-top: 10px; background: #fff1f0; padding: 8px; border-radius: 6px; border: 1px solid #ffa39e; font-weight: bold; }
         #loading { text-align: center; padding: 50px; color: #999; }
     </style>
 </head>
@@ -55,15 +53,15 @@ async function init() {
 
 async function fetchOrders() {
     try {
-        // 加上時間戳 t=... 強制避開瀏覽器快取，確保看到最新狀態
+        // 使用 userId 參數向後端請求，配合 index.js 的過濾邏輯
         const [ordersRes, productsRes] = await Promise.all([
-            fetch('/api/admin/orders?t=' + Date.now()),
-            fetch('/api/products?t=' + Date.now())
+            fetch(`/api/admin/orders?userId=${userProfile.userId}&t=${Date.now()}`),
+            fetch(`/api/products?t=${Date.now()}`)
         ]);
-        const allOrders = await ordersRes.json();
+        
+        const myOrders = await ordersRes.json();
         const allProducts = await productsRes.json();
         
-        const myOrders = allOrders.filter(o => o.buyerId === userProfile.userId);
         document.getElementById("loading").style.display = "none";
 
         if (myOrders.length === 0) {
@@ -72,26 +70,23 @@ async function fetchOrders() {
         }
 
         document.getElementById("order-list").innerHTML = myOrders.map(order => {
-            // 預設為可以修改
             let canModify = true;
             let lockReason = "";
 
-            // 尋找對應商品狀態
+            // 1. 商品狀態鎖定 (PDF 需求 2-1)
             const product = allProducts.find(p => String(p.productCode) === String(order.productCode));
-            
-            // 💡 終極邏輯：只有明確偵測到「已結單」或「斷貨」才鎖定
-            if (product && product.status) {
-                const s = product.status.trim();
-                if (s === '已結單' || s === '斷貨') {
-                    canModify = false;
-                    lockReason = "⚠️ 團主已結單，訂單鎖定中";
-                }
+            if (product && (product.status === '已結單' || product.status === '斷貨')) {
+                canModify = false;
+                lockReason = product.status === '斷貨' ? "❌ 此商品已斷貨" : "⚠️ 團主已結單，訂單鎖定中";
             }
 
-            // 若買家已取消
+            // 2. 訂單狀態鎖定 (已到貨或已取消不可再動)
             if (order.status === '買家取消') {
                 canModify = false;
                 lockReason = "❌ 您已取消此筆訂單";
+            } else if (order.status === '已到貨' || order.status === '已收貨') {
+                canModify = false;
+                lockReason = "✅ 商品已抵達，無法修改";
             }
 
             let statusClass = 'status-warning';
@@ -101,12 +96,12 @@ async function fetchOrders() {
             return `
                 <div class="order-card">
                     <div class="order-header">
-                        <span style="font-size:12px; color:#777;">單號: ${order.orderId.slice(-6)}</span>
+                        <span style="font-size:11px; color:#999;">編號: ${order.orderId.slice(-6).toUpperCase()}</span>
                         <span class="order-status ${statusClass}">${order.status}</span>
                     </div>
                     <div class="order-name">${order.productName}</div>
-                    <div style="font-size:13px; color:#666;">規格: ${order.spec} / 數量: ${order.qty}</div>
-                    <div style="color:var(--price-color); font-weight:bold; margin-top:5px; font-size:16px;">總計: $${order.total}</div>
+                    <div style="font-size:13px; color:#666; margin-top:4px;">規格: ${order.spec} / 數量: ${order.qty}</div>
+                    <div style="color:var(--price-color); font-weight:bold; margin-top:8px; font-size:16px;">總計: $${order.total}</div>
                     
                     ${canModify ? `
                         <div class="order-footer">
@@ -121,7 +116,7 @@ async function fetchOrders() {
         }).join("");
     } catch (err) { 
         console.error("Fetch Error:", err);
-        document.getElementById("order-list").innerHTML = "連線失敗，請稍後再試";
+        document.getElementById("order-list").innerHTML = '<div style="text-align:center; padding:20px;">讀取失敗，請確認網路連線</div>';
     }
 }
 
@@ -135,24 +130,33 @@ async function editOrder(orderId, oldQty, price) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 qty: parseInt(newQty), 
-                total: parseInt(newQty) * price, 
                 status: '待點貨' 
             })
         });
-        if (res.ok) fetchOrders();
-    } catch (e) { alert("修改失敗，請檢查網路"); }
+        if (res.ok) {
+            fetchOrders();
+        } else {
+            const errData = await res.json();
+            alert(errData.error || "修改失敗");
+        }
+    } catch (e) { alert("系統忙碌中，請稍後再試"); }
 }
 
 async function deleteOrder(orderId) {
-    if (!confirm("確定要取消這筆訂單嗎？")) return;
+    if (!confirm("確定要取消這筆訂單嗎？\n(注意：若團主已結單將無法取消)")) return;
     try {
         const res = await fetch(`/api/admin/orders/${orderId}/status`, {
             method: 'PUT', 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: '買家取消' })
         });
-        if (res.ok) fetchOrders();
-    } catch (e) { alert("取消失敗"); }
+        if (res.ok) {
+            fetchOrders();
+        } else {
+            const errData = await res.json();
+            alert(errData.error || "取消失敗");
+        }
+    } catch (e) { alert("操作失敗"); }
 }
 
 window.onload = init;
