@@ -38,7 +38,7 @@ let userProfile = null;
 
 async function init() {
     try {
-        // 使用需求書中的 LIFF ID
+        // 使用需求書中的 LIFF ID [cite: 110]
         await liff.init({ liffId: "2008857998-jbKsKkPY" });
         if (!liff.isLoggedIn()) { 
             liff.login(); 
@@ -54,7 +54,7 @@ async function init() {
 
 async function fetchOrders() {
     try {
-        // 同步獲取訂單與產品資訊，用來判斷是否結單
+        // 同步獲取訂單與產品資訊，用來判斷是否結單 [cite: 9, 201]
         const [ordersRes, productsRes] = await Promise.all([
             fetch(`/api/admin/orders?userId=${userProfile.userId}&t=${Date.now()}`),
             fetch(`/api/products?t=${Date.now()}`)
@@ -74,10 +74,10 @@ async function fetchOrders() {
             let canModify = true;
             let lockReason = "";
 
-            // 1. 檢查商品是否已結單或斷貨 (PDF 需求: 已結單則不可修改)
+            // 1. 檢查商品是否已結單或斷貨 (PDF 需求: 已結單則不可修改) 
             const product = allProducts.find(p => String(p.productCode) === String(order.productCode));
             
-            // 判斷邏輯：如果後端標記為已結單、斷貨，或者當前時間已過結單日
+            // 判斷邏輯：如果後端標記為已結單、斷貨，或者當前時間已過結單日 [cite: 189]
             const isProductClosed = product && (product.status === '已結單' || product.status === '斷貨');
             
             if (isProductClosed) {
@@ -85,7 +85,7 @@ async function fetchOrders() {
                 lockReason = product.status === '斷貨' ? "❌ 此商品已斷貨" : "⚠️ 團主已結單，訂單鎖定中";
             }
 
-            // 2. 檢查訂單自身狀態 (已發貨或買家已取消)
+            // 2. 檢查訂單自身狀態 (已發貨或買家已取消) 
             if (order.status === '買家取消') {
                 canModify = false;
                 lockReason = "❌ 您已取消此筆訂單";
@@ -151,4 +151,24 @@ async function editOrder(orderId, oldQty) {
 }
 
 async function deleteOrder(orderId) {
-    if (!confirm("確定要取消這筆訂單嗎
+    if (!confirm("確定要取消這筆訂單嗎？\n取消後若商品已結單，將無法重新下單。")) return;
+    try {
+        const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+            method: 'PUT', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: '買家取消' })
+        });
+        if (res.ok) {
+            alert("訂單已取消");
+            fetchOrders();
+        } else {
+            const errData = await res.json();
+            alert(errData.error || "取消失敗");
+        }
+    } catch (e) { alert("操作失敗"); }
+}
+
+window.onload = init;
+</script>
+</body>
+</html>
