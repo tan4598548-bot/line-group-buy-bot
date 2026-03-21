@@ -5,20 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        body { background:#f4f4f4; margin:0; padding-bottom:60px; font-family: sans-serif; }
+        body { background:#f4f4f4; margin:0; padding-bottom:60px; font-family: -apple-system, sans-serif; }
         .p-grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; padding:10px; }
-        .p-card { background:white; border-radius:10px; overflow:hidden; position:relative; box-shadow:0 2px 5px rgba(0,0,0,0.05); }
+        .p-card { background:white; border-radius:10px; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,0.05); }
         .p-img { width:100%; aspect-ratio:1/1; object-fit:cover; }
-        .p-info { padding:8px; }
-        .p-price { color:#e44d26; font-weight:bold; font-size:15px; }
-        /* 結單日期標籤 */
-        .date-tag { font-size:10px; color:#d9534f; background:#fff1f0; padding:2px 5px; border-radius:3px; margin-top:4px; display:inline-block; }
+        .p-info { padding:10px; }
+        .p-price { color:#e44d26; font-weight:bold; }
+        .date-tag { font-size:11px; color:#d9534f; background:#fff1f0; padding:2px 5px; border-radius:3px; margin-top:5px; display:inline-block; }
         .tab-bar { position:fixed; bottom:0; width:100%; height:55px; background:white; display:flex; border-top:1px solid #ddd; }
         .tab { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-decoration:none; color:#888; font-size:12px; }
     </style>
 </head>
 <body>
-    <div style="background:#06c755; color:white; padding:12px; text-align:center; font-weight:bold;">🛒 正在進行中的團購</div>
+    <div style="background:#06c755; color:white; padding:15px; text-align:center; font-weight:bold;">✨ 團購進行中</div>
     <div id="grid" class="p-grid">載入中...</div>
     
     <nav class="tab-bar">
@@ -29,27 +28,34 @@
 
 <script>
     async function init() {
-        await liff.init({ liffId: "2008857998-qCQWSTKf" });
-        const res = await fetch("/api/products?t="+Date.now());
-        const data = await res.json();
-        
-        const filtered = data.filter(p => {
-            const isExpired = p.closeDate && new Date(p.closeDate) < new Date();
-            return p.status === '上架' && !isExpired && p.isStock !== true;
-        });
+        try {
+            // 修正：增加錯誤攔截防止卡在初始化 [cite: 106]
+            await liff.init({ liffId: "2008857998-qCQWSTKf" });
+            const res = await fetch("/api/products?t="+Date.now());
+            const data = await res.json();
+            
+            // 過濾未結單且非現貨商品 [cite: 4, 12]
+            const filtered = data.filter(p => {
+                const isExpired = p.closeDate && new Date(p.closeDate) < new Date();
+                return (p.status === '上架' || p.status === 'TRUE') && !isExpired && p.isStock !== true;
+            });
 
-        document.getElementById("grid").innerHTML = filtered.map(p => {
-            const d = p.closeDate ? p.closeDate.split('T')[0] : "長期";
-            return `
-            <div class="p-card" onclick="location.href='liff-product-detail.html?code=${p.productCode}'">
-                <img class="p-img" src="${p.images?.split(',')[0] || ''}">
-                <div class="p-info">
-                    <div style="font-size:13px; font-weight:bold; height:36px; overflow:hidden;">${p.productName}</div>
-                    <div class="p-price">$${p.price}</div>
-                    <div class="date-tag">⏳ 結單：${d}</div>
-                </div>
-            </div>`;
-        }).join("");
+            document.getElementById("grid").innerHTML = filtered.map(p => {
+                // 顯示 Sheet 中的結單日欄位
+                const d = p.closeDate ? p.closeDate.split('T')[0] : "長期";
+                return `
+                <div class="p-card" onclick="location.href='liff-product-detail.html?code=${p.productCode}'">
+                    <img class="p-img" src="${p.images?.split(',')[0] || ''}">
+                    <div class="p-info">
+                        <div style="font-size:13px; margin-bottom:5px; height:36px; overflow:hidden;">${p.productName}</div>
+                        <div class="p-price">$${p.price}</div>
+                        <div class="date-tag">⏳ 結單：${d}</div>
+                    </div>
+                </div>`;
+            }).join("");
+        } catch (e) {
+            document.getElementById("grid").innerHTML = "LIFF 初始化失敗，請於 LINE 開啟";
+        }
     }
     window.onload = init;
 </script>

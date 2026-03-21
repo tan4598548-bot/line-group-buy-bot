@@ -5,81 +5,67 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        .p-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 5px solid #007bff; }
-        .tag { float: right; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-        .tag-上架 { background: #e6fffa; color: #2c7a7b; }
-        .tag-已結單 { background: #fffaf0; color: #9c4221; }
-        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-        button { padding: 10px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; }
-        .btn-add { background: #007bff; color: white; border: none; font-weight: bold; }
+        body { font-family: sans-serif; background: #f8f9fa; padding: 15px; }
+        .p-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .tag { float: right; padding: 4px 8px; border-radius: 4px; font-size: 11px; }
+        .tag-on { background: #e6fffa; color: #2c7a7b; }
+        .tag-off { background: #fff5f5; color: #c53030; }
+        .btn-group { display: flex; gap: 5px; margin-top: 10px; }
+        button { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px; background: white; }
+        .btn-add { background: #007bff; color: white; border: none; padding: 12px; width: 100%; margin-bottom: 20px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <button onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button>
-        <button class="btn-add" onclick="location.href='liff-admin-add-product.html'">➕ 上架新商品</button>
-    </div>
-    <div id="list">🔍 正在同步雲端商品清單...</div>
+    <button onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button>
+    <h3>📦 商品管理 (1)</h3>
+    <button class="btn-add" onclick="location.href='liff-admin-add-product.html'">➕ 新增上架商品</button>
+    <div id="list">🔄 正在獲取商品清單...</div>
 
 <script>
     async function init() {
         try {
+            // 修正：對應正確的 ID [cite: 113]
             await liff.init({ liffId: "2008857998-AoqmEajq" });
-            fetchProducts();
-        } catch (e) { document.getElementById("list").innerText = "LIFF 初始化失敗"; }
+            fetchData();
+        } catch (e) {
+            document.getElementById("list").innerHTML = "LIFF 初始化失敗，請於 LINE 開啟";
+        }
     }
 
-    async function fetchProducts() {
+    async function fetchData() {
         const container = document.getElementById("list");
         try {
             const res = await fetch("/api/products?t=" + Date.now());
-            const products = await res.json();
+            const list = await res.json();
             
-            if (!Array.isArray(products) || products.length === 0) {
-                container.innerHTML = '<div style="text-align:center; padding:50px; color:#999;">📭 目前暫無商品，請點擊上方新增</div>';
+            if (!list || list.length === 0) {
+                container.innerHTML = "目前尚無商品資料";
                 return;
             }
 
-            container.innerHTML = products.map(p => {
-                const isExpired = p.closeDate && new Date(p.closeDate) < new Date();
-                const status = isExpired ? "已結單" : (p.status || "上架");
-                const dateStr = p.closeDate ? p.closeDate.split('T')[0] : '未設定';
-
+            container.innerHTML = list.map(p => {
+                const status = (p.status === '上架' || p.status === 'TRUE') ? 'on' : 'off';
                 return `
                 <div class="p-card">
-                    <span class="tag tag-${status}">${status}</span>
-                    <div style="font-weight:bold; font-size:16px; margin-bottom:5px;">${p.productName || '未命名'}</div>
-                    <div style="font-size:13px; color:#666;">代碼: ${p.productCode} | 單價: $${p.price}</div>
-                    <div style="font-size:12px; color:#d9534f; margin-top:5px;">📅 結單日: ${dateStr}</div>
+                    <span class="tag tag-${status}">${status === 'on' ? '上架中' : '已結單/下架'}</span>
+                    <strong>${p.productName}</strong><br>
+                    <small>代碼: ${p.productCode} / 價格: $${p.price}</small><br>
+                    <small style="color:red">結單日: ${p.closeDate ? p.closeDate.split('T')[0] : '未設'}</small>
                     <div class="btn-group">
-                        <button onclick="location.href='liff-admin-edit-product.html?code=${p.productCode}'">✏️ 編輯/修正</button>
-                        <button onclick="updateStatus('${p.productCode}', '已結單')">⛔ 手動結單</button>
-                        <button onclick="markOut('${p.productCode}')" style="color:red">❌ 斷貨回報</button>
-                        <button onclick="deleteProduct('${p.productCode}')">🗑️ 下架刪除</button>
+                        <button onclick="location.href='liff-admin-edit-product.html?code=${p.productCode}'">✏️ 修正</button>
+                        <button onclick="deleteProd('${p.productCode}')" style="color:red">🗑️ 刪除</button>
                     </div>
                 </div>`;
             }).join("");
         } catch (err) {
-            container.innerHTML = "❌ 載入失敗，請確認後端網路連線";
-            console.error(err);
+            container.innerHTML = "❌ 讀取 Sheet 資料失敗";
         }
     }
 
-    async function updateStatus(code, status) {
-        if(!confirm("確定變更狀態？")) return;
-        await fetch(`/api/products/${code}`, {
-            method: 'PUT', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ status })
-        });
-        fetchProducts();
-    }
-
-    async function deleteProduct(code) {
-        if(!confirm("確定永久刪除？")) return;
+    async function deleteProd(code) {
+        if(!confirm("確定要刪除這項商品嗎？")) return;
         await fetch(`/api/products/${code}`, { method: 'DELETE' });
-        fetchProducts();
+        fetchData(); // 重新整理清單
     }
 
     window.onload = init;

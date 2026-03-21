@@ -8,7 +8,7 @@
     <style>
         :root { --primary-color: #06c755; --danger-color: #dc3545; --bg: #f8f9fa; --price-color: #e44d26; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; }
-        .nav-bar { display: flex; align-items: center; margin-bottom: 20px; }
+        .nav-bar { display: flex; align-items: center; margin-bottom: 20px; position: sticky; top: 0; background: var(--bg); padding: 5px 0; z-index: 10; }
         .order-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #eee; }
         .order-header { display: flex; justify-content: space-between; border-bottom: 1px solid #f0f0f0; padding-bottom: 10px; margin-bottom: 10px; }
         .order-status { font-size: 12px; font-weight: bold; padding: 2px 8px; border-radius: 4px; background: #e9ecef; }
@@ -17,7 +17,7 @@
         .status-danger { color: #721c24; background: #f8d7da; }
         .order-name { font-weight: bold; font-size: 15px; margin-bottom: 5px; color: #333; }
         .order-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #eee; }
-        .btn-sm { padding: 8px 16px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; font-weight: bold; transition: 0.2s; text-decoration: none; display: inline-block; }
+        .btn-sm { padding: 8px 16px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; font-weight: bold; transition: 0.2s; text-decoration: none; display: inline-block; text-align: center; }
         .btn-edit { color: var(--primary-color); border-color: var(--primary-color); background: #fff; }
         .btn-del { color: var(--danger-color); border-color: var(--danger-color); background: #fff; }
         .locked-msg { font-size: 12px; color: #d9534f; text-align: center; margin-top: 10px; background: #fff1f0; padding: 8px; border-radius: 6px; border: 1px solid #ffa39e; font-weight: bold; }
@@ -26,7 +26,7 @@
 </head>
 <body>
     <div class="nav-bar">
-        <a href="liff-product-list.html" style="text-decoration:none; color:#666; margin-right:10px; font-size: 20px;">⬅</a>
+        <a href="liff-product-list.html" style="text-decoration:none; color:#666; margin-right:10px; font-size: 24px;">⬅</a>
         <h3 style="margin:0;">📋 我的訂購紀錄</h3>
     </div>
     
@@ -38,6 +38,7 @@ let userProfile = null;
 
 async function init() {
     try {
+        // 使用需求書中的 LIFF ID
         await liff.init({ liffId: "2008857998-jbKsKkPY" });
         if (!liff.isLoggedIn()) { 
             liff.login(); 
@@ -53,7 +54,7 @@ async function init() {
 
 async function fetchOrders() {
     try {
-        // 使用 userId 參數向後端請求，配合 index.js 的過濾邏輯
+        // 同步獲取訂單與產品資訊，用來判斷是否結單
         const [ordersRes, productsRes] = await Promise.all([
             fetch(`/api/admin/orders?userId=${userProfile.userId}&t=${Date.now()}`),
             fetch(`/api/products?t=${Date.now()}`)
@@ -64,7 +65,7 @@ async function fetchOrders() {
         
         document.getElementById("loading").style.display = "none";
 
-        if (myOrders.length === 0) {
+        if (!myOrders || myOrders.length === 0) {
             document.getElementById("order-list").innerHTML = '<div style="text-align:center; color:#999; padding:50px;">目前尚無訂單紀錄</div>';
             return;
         }
@@ -73,14 +74,18 @@ async function fetchOrders() {
             let canModify = true;
             let lockReason = "";
 
-            // 1. 商品狀態鎖定 (PDF 需求 2-1)
+            // 1. 檢查商品是否已結單或斷貨 (PDF 需求: 已結單則不可修改)
             const product = allProducts.find(p => String(p.productCode) === String(order.productCode));
-            if (product && (product.status === '已結單' || product.status === '斷貨')) {
+            
+            // 判斷邏輯：如果後端標記為已結單、斷貨，或者當前時間已過結單日
+            const isProductClosed = product && (product.status === '已結單' || product.status === '斷貨');
+            
+            if (isProductClosed) {
                 canModify = false;
                 lockReason = product.status === '斷貨' ? "❌ 此商品已斷貨" : "⚠️ 團主已結單，訂單鎖定中";
             }
 
-            // 2. 訂單狀態鎖定 (已到貨或已取消不可再動)
+            // 2. 檢查訂單自身狀態 (已發貨或買家已取消)
             if (order.status === '買家取消') {
                 canModify = false;
                 lockReason = "❌ 您已取消此筆訂單";
@@ -89,6 +94,7 @@ async function fetchOrders() {
                 lockReason = "✅ 商品已抵達，無法修改";
             }
 
+            // 設定標籤顏色
             let statusClass = 'status-warning';
             if (order.status === '已到貨' || order.status === '已收貨') statusClass = 'status-success';
             if (order.status === '斷貨' || order.status === '買家取消') statusClass = 'status-danger';
@@ -96,16 +102,17 @@ async function fetchOrders() {
             return `
                 <div class="order-card">
                     <div class="order-header">
-                        <span style="font-size:11px; color:#999;">編號: ${order.orderId.slice(-6).toUpperCase()}</span>
+                        <span style="font-size:11px; color:#999;">訂單編號: ${order.orderId ? order.orderId.slice(-8).toUpperCase() : 'N/A'}</span>
                         <span class="order-status ${statusClass}">${order.status}</span>
                     </div>
                     <div class="order-name">${order.productName}</div>
-                    <div style="font-size:13px; color:#666; margin-top:4px;">規格: ${order.spec} / 數量: ${order.qty}</div>
+                    <div style="font-size:13px; color:#666; margin-top:4px;">規格: ${order.spec}</div>
+                    <div style="font-size:13px; color:#666; margin-top:2px;">數量: ${order.qty} / 單價: $${order.price}</div>
                     <div style="color:var(--price-color); font-weight:bold; margin-top:8px; font-size:16px;">總計: $${order.total}</div>
                     
                     ${canModify ? `
                         <div class="order-footer">
-                            <button class="btn-sm btn-edit" onclick="editOrder('${order.orderId}', ${order.qty}, ${order.price})">修改數量</button>
+                            <button class="btn-sm btn-edit" onclick="editOrder('${order.orderId}', ${order.qty})">修改數量</button>
                             <button class="btn-sm btn-del" onclick="deleteOrder('${order.orderId}')">取消訂單</button>
                         </div>
                     ` : `
@@ -116,12 +123,12 @@ async function fetchOrders() {
         }).join("");
     } catch (err) { 
         console.error("Fetch Error:", err);
-        document.getElementById("order-list").innerHTML = '<div style="text-align:center; padding:20px;">讀取失敗，請確認網路連線</div>';
+        document.getElementById("order-list").innerHTML = '<div style="text-align:center; padding:20px; color:red;">資料載入異常，請重整頁面</div>';
     }
 }
 
-async function editOrder(orderId, oldQty, price) {
-    const newQty = prompt("請輸入新的數量:", oldQty);
+async function editOrder(orderId, oldQty) {
+    const newQty = prompt("請輸入新的購買數量:", oldQty);
     if (newQty === null || newQty == oldQty || isNaN(newQty) || newQty <= 0) return;
     
     try {
@@ -134,32 +141,14 @@ async function editOrder(orderId, oldQty, price) {
             })
         });
         if (res.ok) {
+            alert("訂單已更新");
             fetchOrders();
         } else {
             const errData = await res.json();
-            alert(errData.error || "修改失敗");
+            alert(errData.error || "修改失敗，可能該團已結單");
         }
     } catch (e) { alert("系統忙碌中，請稍後再試"); }
 }
 
 async function deleteOrder(orderId) {
-    if (!confirm("確定要取消這筆訂單嗎？\n(注意：若團主已結單將無法取消)")) return;
-    try {
-        const res = await fetch(`/api/admin/orders/${orderId}/status`, {
-            method: 'PUT', 
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: '買家取消' })
-        });
-        if (res.ok) {
-            fetchOrders();
-        } else {
-            const errData = await res.json();
-            alert(errData.error || "取消失敗");
-        }
-    } catch (e) { alert("操作失敗"); }
-}
-
-window.onload = init;
-</script>
-</body>
-</html>
+    if (!confirm("確定要取消這筆訂單嗎
