@@ -38,11 +38,11 @@
       <input type="number" id="cost" placeholder="僅供後台查看" value="0">
     </div>
     <div class="form-group">
-      <label>顏色規格</label>
+      <label>顏色對照 (用逗號隔開)</label>
       <input type="text" id="colorMap" placeholder="如：紅色,藍色,黑色">
     </div>
     <div class="form-group">
-      <label>尺寸規格</label>
+      <label>尺寸規格 (用逗號隔開)</label>
       <input type="text" id="sizeMap" placeholder="如：S,M,L,XL">
     </div>
     <div class="form-group">
@@ -55,10 +55,6 @@
     <div class="form-group">
       <label>圖片網址</label>
       <input type="text" id="images" placeholder="https://...">
-    </div>
-    <div class="form-group">
-      <label>YouTube 連結</label>
-      <input type="text" id="youtube" placeholder="影片連結">
     </div>
     <div class="form-group">
       <label>預計結單日期</label>
@@ -80,20 +76,16 @@
       btn.disabled = true;
       btn.innerText = "資料傳送中...";
 
-      const colors = document.getElementById("colorMap").value || "單一顏色";
-      const sizes = document.getElementById("sizeMap").value || "單一尺寸";
-      const specSize = `規格:${colors} | 尺寸:${sizes}`;
-
       const payload = {
         productName: document.getElementById("productName").value,
         price: document.getElementById("price").value,
         cost: document.getElementById("cost").value || 0,
-        specSize: specSize,
+        specSize: document.getElementById("colorMap").value || "單一規格", // 送往 C 欄 (顏色)
+        color: document.getElementById("sizeMap").value || "單一尺寸",     // 送往 D 欄 (尺寸)
         type: document.getElementById("type").value,
         images: document.getElementById("images").value || "",
-        youtube: document.getElementById("youtube").value || "",
         closeDate: document.getElementById("closeDate").value || "",
-        status: "上架", // 💡 強制設定為「上架」以免鎖定
+        status: "上架",
         description: ""
       };
 
@@ -106,11 +98,9 @@
 
         if (res.ok) {
           alert("✅ 商品已成功上架！");
-          // 💡 修正跳轉路徑，加上 /liff/ 
           window.location.replace("/liff/liff-admin-products.html");
         } else {
-          const errData = await res.json();
-          throw new Error(errData.error || "伺服器回應錯誤");
+          throw new Error("伺服器回應錯誤");
         }
       } catch (err) {
         alert("❌ 上架失敗：" + err.message);

@@ -16,7 +16,6 @@
         .input-group { margin-top: 18px; }
         .input-group label { display: block; font-weight: 600; margin-bottom: 8px; color: #555; font-size: 14px; }
         select, input { width: 100%; height: 50px; border: 1px solid #ddd; border-radius: 12px; padding: 0 15px; font-size: 16px; box-sizing: border-box; background: #fff; -webkit-appearance: none; appearance: none; }
-        /* 下拉選單小箭頭 */
         .select-wrapper { position: relative; }
         .select-wrapper::after { content: '▼'; font-size: 12px; color: #aaa; position: absolute; right: 15px; top: 18px; pointer-events: none; }
         .footer { position: fixed; bottom: 0; width: 100%; padding: 15px 20px; background: white; border-top: 1px solid #eee; box-sizing: border-box; display: flex; gap: 10px; }
@@ -68,7 +67,7 @@
 
     async function init() {
         try {
-            await liff.init({ liffId: "2008857998-qOI2DqCC" }); [cite: 136]
+            await liff.init({ liffId: "2008857998-qOI2DqCC" });
             if (!liff.isLoggedIn()) { liff.login(); return; }
             userProfile = await liff.getProfile();
 
@@ -80,13 +79,13 @@
             currentProduct = products.find(p => String(p.productCode) === String(productCode));
 
             if (!currentProduct) {
-                alert("抱歉，找不到該商品或已下架");
+                alert("商品已下架或不存在");
                 location.href = 'liff-product-list.html';
                 return;
             }
             renderProduct();
         } catch (err) {
-            console.error("初始化失敗:", err);
+            console.error("LIFF Init Error:", err);
         }
     }
 
@@ -96,27 +95,24 @@
         document.getElementById('pImg').src = currentProduct.images?.split(',')[0] || '';
         document.getElementById('pDesc').innerText = currentProduct.description || "";
 
-        // 結單日顯示
         if (currentProduct.closeDate) {
             const dateSpan = document.getElementById('pCloseDate');
             dateSpan.style.display = 'inline-block';
             dateSpan.innerText = "⏳ 結單日期：" + currentProduct.closeDate.split('T')[0];
         }
 
-        // 1. 渲染顏色/規格 (對應 C 欄)
+        // 填充顏色 (specSize 對應 C 欄)
         const colorSelect = document.getElementById('colorSelect');
-        if (currentProduct.specSize) { // 假設 API 欄位名仍為 specSize 但內容已純化為顏色
-            const colors = currentProduct.specSize.split(/[,，;]/);
-            colors.forEach(c => {
+        if (currentProduct.specSize) {
+            currentProduct.specSize.split(/[,，;]/).forEach(c => {
                 if(c.trim()) colorSelect.add(new Option(c.trim(), c.trim()));
             });
         }
 
-        // 2. 渲染尺寸 (對應 D 欄)
+        // 填充尺寸 (color 對應 D 欄)
         const sizeSelect = document.getElementById('sizeSelect');
-        if (currentProduct.color) { // 假設 API 欄位名為 color 存放尺寸資料
-            const sizes = currentProduct.color.split(/[,，;]/);
-            sizes.forEach(s => {
+        if (currentProduct.color) {
+            currentProduct.color.split(/[,，;]/).forEach(s => {
                 if(s.trim()) sizeSelect.add(new Option(s.trim(), s.trim()));
             });
         }
@@ -134,7 +130,7 @@
             btn.classList.add('btn-active');
         } else {
             btn.disabled = true;
-            btn.innerText = "請先完成規格選擇";
+            btn.innerText = "請完成選擇";
             btn.classList.remove('btn-active');
         }
     }
@@ -146,18 +142,18 @@
 
         const btn = document.getElementById('submitBtn');
         btn.disabled = true;
-        btn.innerText = "訂單處理中...";
+        btn.innerText = "處理中...";
 
         const orderData = {
             buyerId: userProfile.userId,
             buyerName: userProfile.displayName,
             productCode: currentProduct.productCode,
             productName: currentProduct.productName,
-            spec: `${color} / ${size}`, // 合併存入 Orders 表 
+            spec: `${color} / ${size}`, 
             qty: qty,
             price: currentProduct.price,
             total: currentProduct.price * qty,
-            status: '待點貨' [cite: 223]
+            status: '待點貨'
         };
 
         try {
@@ -168,15 +164,17 @@
             });
 
             if (res.ok) {
-                alert("🎉 下單成功！您可以在「我的訂單」查看詳情");
-                location.href = "liff-buyer-orders.html"; [cite: 111]
+                alert("下單成功！");
+                location.href = "liff-buyer-orders.html";
             } else {
-                throw new Error();
+                const err = await res.json();
+                alert("下單失敗：" + (err.error || "請重試"));
+                btn.disabled = false;
+                btn.innerText = "🛒 確認提交訂單";
             }
         } catch (e) {
-            alert("提交失敗，請檢查網路連線");
+            alert("系統錯誤");
             btn.disabled = false;
-            btn.innerText = "🛒 確認提交訂單";
         }
     }
 
