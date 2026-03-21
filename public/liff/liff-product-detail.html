@@ -58,7 +58,7 @@
     </div>
 
     <div class="footer">
-        <button id="submitBtn" class="btn-submit" onclick="handleOrder()" disabled>請先完成規格選擇</button>
+        <button id="submitBtn" class="btn-submit" onclick="handleOrder()" disabled>請完成選擇</button>
     </div>
 
 <script>
@@ -73,20 +73,17 @@
 
             const urlParams = new URLSearchParams(window.location.search);
             const productCode = urlParams.get('code');
-            
             const res = await fetch("/api/products?t=" + Date.now());
             const products = await res.json();
             currentProduct = products.find(p => String(p.productCode) === String(productCode));
 
-            if (!currentProduct) {
-                alert("商品已下架或不存在");
+            if (!currentProduct || currentProduct.status !== '上架') {
+                alert("此商品已結單或下架");
                 location.href = 'liff-product-list.html';
                 return;
             }
             renderProduct();
-        } catch (err) {
-            console.error("LIFF Init Error:", err);
-        }
+        } catch (err) { console.error(err); }
     }
 
     function renderProduct() {
@@ -101,45 +98,42 @@
             dateSpan.innerText = "⏳ 結單日期：" + currentProduct.closeDate.split('T')[0];
         }
 
-        // 填充顏色 (specSize 對應 C 欄)
+        // 💡 修正：相容全/半形逗號與分號
+        const splitRegex = /[，,；;]/;
+
         const colorSelect = document.getElementById('colorSelect');
         if (currentProduct.specSize) {
-            currentProduct.specSize.split(/[,，;]/).forEach(c => {
-                if(c.trim()) colorSelect.add(new Option(c.trim(), c.trim()));
+            currentProduct.specSize.split(splitRegex).forEach(c => {
+                const val = c.trim();
+                if(val) colorSelect.add(new Option(val, val));
             });
         }
 
-        // 填充尺寸 (color 對應 D 欄)
         const sizeSelect = document.getElementById('sizeSelect');
         if (currentProduct.color) {
-            currentProduct.color.split(/[,，;]/).forEach(s => {
-                if(s.trim()) sizeSelect.add(new Option(s.trim(), s.trim()));
+            currentProduct.color.split(splitRegex).forEach(s => {
+                const val = s.trim();
+                if(val) sizeSelect.add(new Option(val, val));
             });
         }
     }
 
     function validateForm() {
-        const color = document.getElementById('colorSelect').value;
-        const size = document.getElementById('sizeSelect').value;
-        const qty = document.getElementById('qty').value;
+        const c = document.getElementById('colorSelect').value;
+        const s = document.getElementById('sizeSelect').value;
+        const q = document.getElementById('qty').value;
         const btn = document.getElementById('submitBtn');
-
-        if (color && size && qty > 0) {
+        if (c && s && q > 0) {
             btn.disabled = false;
             btn.innerText = "🛒 確認提交訂單";
             btn.classList.add('btn-active');
         } else {
             btn.disabled = true;
-            btn.innerText = "請完成選擇";
             btn.classList.remove('btn-active');
         }
     }
 
     async function handleOrder() {
-        const color = document.getElementById('colorSelect').value;
-        const size = document.getElementById('sizeSelect').value;
-        const qty = parseInt(document.getElementById('qty').value);
-
         const btn = document.getElementById('submitBtn');
         btn.disabled = true;
         btn.innerText = "處理中...";
@@ -149,35 +143,27 @@
             buyerName: userProfile.displayName,
             productCode: currentProduct.productCode,
             productName: currentProduct.productName,
-            spec: `${color} / ${size}`, 
-            qty: qty,
+            spec: `${document.getElementById('colorSelect').value} / ${document.getElementById('sizeSelect').value}`,
+            qty: parseInt(document.getElementById('qty').value),
             price: currentProduct.price,
-            total: currentProduct.price * qty,
+            total: currentProduct.price * parseInt(document.getElementById('qty').value),
             status: '待點貨'
         };
 
-        try {
-            const res = await fetch('/api/admin/orders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(orderData)
-            });
+        const res = await fetch('/api/admin/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderData)
+        });
 
-            if (res.ok) {
-                alert("下單成功！");
-                location.href = "liff-buyer-orders.html";
-            } else {
-                const err = await res.json();
-                alert("下單失敗：" + (err.error || "請重試"));
-                btn.disabled = false;
-                btn.innerText = "🛒 確認提交訂單";
-            }
-        } catch (e) {
-            alert("系統錯誤");
+        if (res.ok) {
+            alert("下單成功！");
+            location.href = "liff-buyer-orders.html";
+        } else {
+            alert("下單失敗，請重試");
             btn.disabled = false;
         }
     }
-
     window.onload = init;
 </script>
 </body>
