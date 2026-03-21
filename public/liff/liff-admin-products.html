@@ -1,94 +1,65 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <title>商品管理</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <style>
-        body { font-family: sans-serif; padding: 15px; background: #f4f4f4; }
-        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .input-group { margin-bottom: 12px; }
-        label { display: block; font-size: 14px; margin-bottom: 4px; font-weight: bold; }
-        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        .btn { background: #00b900; color: white; border: none; padding: 12px; border-radius: 4px; width: 100%; font-weight: bold; cursor: pointer; }
-    </style>
+  <meta charset="UTF-8">
+  <title>商品管理中心</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: -apple-system, sans-serif; background: #f8f9fa; padding: 15px; margin: 0; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .btn-return { color: #666; text-decoration: none; font-size: 16px; }
+    .btn-add { background: #00c300; color: white; padding: 8px 16px; border-radius: 20px; text-decoration: none; font-weight: bold; font-size: 14px; }
+    .product-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); position: relative; }
+    .status-badge { position: absolute; top: 15px; right: 15px; padding: 2px 8px; border-radius: 4px; font-size: 12px; background: #e8f5e9; color: #2e7d32; }
+    .p-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 5px; }
+    .p-detail { font-size: 14px; color: #666; margin-bottom: 10px; }
+    .btn-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .action-btn { border: none; padding: 8px 0; border-radius: 4px; color: white; font-size: 13px; font-weight: bold; cursor: pointer; }
+    .btn-edit { background: #007bff; } .btn-close { background: #6c757d; } .btn-out { background: #ffc107; color: #333; } .btn-del { background: #dc3545; }
+  </style>
 </head>
 <body>
 
-<div class="card">
-    <h3 style="color:#00b900">📦 新增商品上架</h3>
-    <div id="addArea">
-        <div class="input-group">
-            <label>商品代碼 (不填由系統生成)</label>
-            <input type="text" id="pCode" placeholder="如 P618484">
-        </div>
-        <div class="input-group">
-            <label>商品名稱 *</label>
-            <input type="text" id="pName">
-        </div>
-        <div class="input-group">
-            <label>是否現貨</label>
-            <select id="isStock" onchange="document.getElementById('stockInput').style.display = (this.value==='true'?'block':'none')">
-                <option value="false">預購</option>
-                <option value="true">現貨</option>
-            </select>
-        </div>
-        <div id="stockInput" class="input-group" style="display:none">
-            <label>庫存數量</label>
-            <input type="number" id="pStock" value="0">
-        </div>
-        <div class="input-group">
-            <label>銷售單價</label>
-            <input type="number" id="pPrice" value="0">
-        </div>
-        <div class="input-group">
-            <label>成本價</label>
-            <input type="number" id="pCost" value="0">
-        </div>
-        <button type="button" class="btn" id="submitBtn" onclick="submitProduct()">確認送出上架</button>
-    </div>
-</div>
+  <div class="header">
+    <a href="liff-admin-dashboard.html" class="btn-return">⬅ 返回中心</a>
+    <a href="liff-admin-add-product.html" class="btn-add">+ 新增商品</a>
+  </div>
 
-<script>
-    async function submitProduct() {
-        const name = document.getElementById('pName').value;
-        if (!name) return alert("請輸入商品名稱");
+  <div id="productList">正在讀取商品清單...</div>
 
-        const btn = document.getElementById('submitBtn');
-        btn.disabled = true;
-        btn.innerText = "連線中...";
+  <script>
+    async function loadProducts() {
+      try {
+        const res = await fetch('/api/products');
+        const products = await res.json();
+        const listDiv = document.getElementById('productList');
+        listDiv.innerHTML = '';
 
-        const payload = {
-            productCode: document.getElementById('pCode').value || 'P' + Date.now().toString().slice(-6),
-            productName: name,
-            isStock: document.getElementById('isStock').value === 'true',
-            stock: Number(document.getElementById('pStock').value) || 0,
-            price: Number(document.getElementById('pPrice').value) || 0,
-            cost: Number(document.getElementById('pCost').value) || 0
-        };
-
-        try {
-            const res = await fetch('/api/admin/products', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (res.ok) {
-                alert("✅ 上架成功！");
-                window.location.reload();
-            } else {
-                alert("❌ 失敗：400 Bad Request，請確認後端路由是否正確掛載。");
-            }
-        } catch (e) {
-            alert("❌ 網路異常，請確認後端服務已啟動。");
-        } finally {
-            btn.disabled = false;
-            btn.innerText = "確認送出上架";
-        }
+        products.forEach(p => {
+          const card = document.createElement('div');
+          card.className = 'product-card';
+          card.innerHTML = `
+            <div class="status-badge">${p.status}</div>
+            <div class="p-title">${p.productName}</div>
+            <div class="p-detail">代碼: ${p.productCode} | 價格: $${p.price}</div>
+            <div class="p-detail">規格: ${p.specSize} | 尺寸: ${p.color}</div>
+            <div class="btn-group">
+              <button class="action-btn btn-edit">修正</button>
+              <button class="action-btn btn-close">結單</button>
+              <button class="action-btn btn-out">斷貨</button>
+              <button class="action-btn btn-del">刪除</button>
+            </div>
+          `;
+          listDiv.appendChild(card);
+        });
+      } catch (e) { document.getElementById('productList').innerText = "載入失敗"; }
     }
-    
-    liff.init({ liffId: "您的管理端LIFF_ID" });
-</script>
+
+    liff.init({ liffId: "2008857998-AoqmEajq" }).then(() => {
+      if (!liff.isLoggedIn()) liff.login();
+      loadProducts();
+    });
+  </script>
 </body>
 </html>

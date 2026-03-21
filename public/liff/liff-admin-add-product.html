@@ -10,15 +10,8 @@
     h2 { font-size: 22px; margin-bottom: 20px; color: #333; text-align: center; }
     .form-group { margin-bottom: 15px; }
     label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
-    input, select { 
-      width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; 
-      box-sizing: border-box; font-size: 16px; background: white;
-    }
-    .btn-submit { 
-      background: #00c300; color: white; border: none; width: 100%; 
-      padding: 16px; border-radius: 8px; font-size: 18px; font-weight: bold; 
-      margin-top: 20px; cursor: pointer;
-    }
+    input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; background: white; }
+    .btn-submit { background: #00c300; color: white; border: none; width: 100%; padding: 16px; border-radius: 8px; font-size: 18px; font-weight: bold; margin-top: 20px; cursor: pointer; }
     .btn-submit:disabled { background: #ccc; }
   </style>
 </head>
@@ -38,11 +31,11 @@
       <input type="number" id="cost" placeholder="僅供後台查看" value="0">
     </div>
     <div class="form-group">
-      <label>顏色對照 (用逗號隔開)</label>
+      <label>顏色對照 (用逗號隔開) [C欄]</label>
       <input type="text" id="colorMap" placeholder="如：紅色,藍色,黑色">
     </div>
     <div class="form-group">
-      <label>尺寸規格 (用逗號隔開)</label>
+      <label>尺寸規格 (用逗號隔開) [D欄]</label>
       <input type="text" id="sizeMap" placeholder="如：S,M,L,XL">
     </div>
     <div class="form-group">
@@ -51,6 +44,10 @@
         <option value="normal">預購 (Normal)</option>
         <option value="overstock">現貨 (Overstock)</option>
       </select>
+    </div>
+    <div id="stockArea" class="form-group" style="display:none;">
+      <label>現貨初始庫存 [N欄]</label>
+      <input type="number" id="stock" value="0">
     </div>
     <div class="form-group">
       <label>圖片網址</label>
@@ -64,10 +61,12 @@
   </form>
 
   <script>
+    document.getElementById('type').onchange = function() {
+      document.getElementById('stockArea').style.display = this.value === 'overstock' ? 'block' : 'none';
+    };
+
     async function init() {
-      try {
-        await liff.init({ liffId: "2008857998-AoqmEajq" });
-      } catch (e) { console.error(e); }
+      await liff.init({ liffId: "2008857998-ZNTmhd33" });
     }
 
     document.getElementById("productForm").onsubmit = async (e) => {
@@ -77,20 +76,21 @@
       btn.innerText = "資料傳送中...";
 
       const payload = {
+        productCode: 'P' + Date.now().toString().slice(-6),
         productName: document.getElementById("productName").value,
-        price: document.getElementById("price").value,
-        cost: document.getElementById("cost").value || 0,
-        specSize: document.getElementById("colorMap").value || "單一規格", // 送往 C 欄 (顏色)
-        color: document.getElementById("sizeMap").value || "單一尺寸",     // 送往 D 欄 (尺寸)
-        type: document.getElementById("type").value,
+        price: Number(document.getElementById("price").value),
+        cost: Number(document.getElementById("cost").value) || 0,
+        specSize: document.getElementById("colorMap").value || "單一規格", // C 欄
+        color: document.getElementById("sizeMap").value || "單一尺寸",    // D 欄
+        isStock: document.getElementById("type").value === "overstock",
+        stock: Number(document.getElementById("stock").value) || 0,     // N 欄
         images: document.getElementById("images").value || "",
         closeDate: document.getElementById("closeDate").value || "",
-        status: "上架",
-        description: ""
+        status: "上架"
       };
 
       try {
-        const res = await fetch("/api/products", {
+        const res = await fetch("/api/admin/products", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -98,15 +98,11 @@
 
         if (res.ok) {
           alert("✅ 商品已成功上架！");
-          window.location.replace("/liff/liff-admin-products.html");
-        } else {
-          throw new Error("伺服器回應錯誤");
-        }
-      } catch (err) {
-        alert("❌ 上架失敗：" + err.message);
-        btn.disabled = false;
-        btn.innerText = "確認上架";
-      }
+          window.location.href = "liff-admin-products.html";
+        } else { alert("❌ 上架失敗"); }
+      } catch (err) { alert("錯誤: " + err.message); }
+      btn.disabled = false;
+      btn.innerText = "確認上架商品";
     };
     window.onload = init;
   </script>
