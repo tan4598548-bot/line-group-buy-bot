@@ -5,25 +5,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
-    .vendor-card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 12px; }
-    .qty-box { background: #eef2f7; padding: 10px; border-radius: 4px; margin: 10px 0; }
+    body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
+    .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; }
+    .vendor-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 12px; border-top: 4px solid #6f42c1; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .p-name { font-weight: bold; font-size: 16px; color: #333; }
+    .qty-box { background: #f8f9ff; padding: 12px; border-radius: 8px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .total-num { color: #6f42c1; font-size: 20px; font-weight: bold; }
+    .btn-back { border: none; background: none; color: #007bff; font-weight: bold; font-size: 16px; cursor: pointer; }
   </style>
 </head>
 <body>
-  <div style="display:flex; justify-content:space-between; align-items:center;">
-    <button onclick="location.href='liff-admin-dashboard.html'">⬅</button>
-    <h3>🏢 廠商採購管理</h3>
+  <div class="header">
+    <button class="btn-back" onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button>
+    <h3 style="margin:0;">🏢 廠商採購總計</h3>
   </div>
-  <div id="vendor-list">載入中...</div>
+  <div id="vendor-list">🔍 正在計算廠商採購總數...</div>
 
 <script>
 async function init() {
   await liff.init({ liffId: "2008857998-481MeChx" });
-  const res = await fetch("/api/admin/orders"); // 示範：從訂單彙整
-  const orders = await res.json();
-  // 這裡應對接後端 Vendor 彙整 API
-  document.getElementById("vendor-list").innerHTML = "目前直接於試算表 VendorOrders 分頁查看彙整結果";
+  if (!liff.isLoggedIn()) liff.login();
+  loadVendorSummary();
+}
+
+async function loadVendorSummary() {
+  try {
+    const res = await fetch("/api/admin/vendor-summary?t=" + Date.now());
+    const data = await res.json();
+    const listDiv = document.getElementById("vendor-list");
+    
+    if (!data || data.length === 0) {
+      listDiv.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">目前沒有待採購的商品資料</div>';
+      return;
+    }
+
+    listDiv.innerHTML = data.map(item => `
+      <div class="vendor-card">
+        <div class="p-name">${item.productName}</div>
+        <div style="font-size:12px; color:#999;">商品代碼: ${item.productCode}</div>
+        <div class="qty-box">
+          <span style="font-size:14px; color:#555;">應向廠商訂購總數：</span>
+          <span class="total-num">${item.totalOrdered} <small style="font-size:12px;">件</small></span>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    document.getElementById("vendor-list").innerHTML = "讀取失敗，請確認網路連線";
+  }
 }
 window.onload = init;
 </script>

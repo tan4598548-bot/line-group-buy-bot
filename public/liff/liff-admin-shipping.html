@@ -5,34 +5,71 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 15px; background: #f4f7f6; }
-    .card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
-    .btn-pdf { background: #007bff; color: white; border: none; width: 100%; padding: 15px; border-radius: 8px; font-weight: bold; position: fixed; bottom: 20px; left: 5%; width: 90%; }
+    body { font-family: -apple-system, sans-serif; padding: 15px; background: #f4f7f6; margin:0; }
+    .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    input[type="checkbox"] { transform: scale(1.5); }
+    .btn-group { position: fixed; bottom: 0; left: 0; width: 100%; background: white; padding: 15px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); display: flex; gap: 10px; box-sizing: border-box; }
+    .btn { border: none; padding: 15px; border-radius: 8px; font-weight: bold; flex: 1; cursor: pointer; }
+    .btn-pdf { background: #007bff; color: white; }
+    .btn-ship { background: #28a745; color: white; }
   </style>
 </head>
 <body>
-  <button onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button>
-  <h3>🚚 待發貨清單 (已到貨商品)</h3>
-  <div id="list" style="padding-bottom: 80px;">載入中...</div>
-  <button class="btn-pdf" onclick="generate()">🖨️ 產生發貨標籤/清單</button>
+  <button onclick="location.href='liff-admin-dashboard.html'" style="margin-bottom:10px; border:none; background:none; color:#007bff; font-weight:bold;">⬅ 返回管理中心</button>
+  <h3 style="margin-top:0;">🚚 待發貨清單 (已到貨)</h3>
+  <div id="list" style="padding-bottom: 100px;">🔍 讀取待出貨資料...</div>
+
+  <div class="btn-group">
+    <button class="btn btn-pdf" onclick="generate()">🖨️ 列印標籤</button>
+    <button class="btn btn-ship" onclick="markAsShipped()">✅ 標記已發貨</button>
+  </div>
 
 <script>
 async function init() {
   await liff.init({ liffId: "2008857998-HUEXLkgO" });
-  const res = await fetch("/api/admin/orders");
-  const data = await res.json();
-  document.getElementById("list").innerHTML = data.filter(o => o.status === '已到貨').map(o => `
-    <div class="card">
-      <input type="checkbox" name="os" value="${o.orderId}" checked>
-      <div><strong>${o.buyerName}</strong><br><small>${o.productName} x ${o.qty}</small></div>
-    </div>
-  `).join("") || "目前沒有已到貨的訂單";
+  if (!liff.isLoggedIn()) liff.login();
+  loadShippingList();
 }
-async function generate() {
-  const ids = Array.from(document.querySelectorAll('input[name="os"]:checked')).map(el => el.value);
+
+async function loadShippingList() {
+  const res = await fetch("/api/admin/orders?t=" + Date.now());
+  const data = await res.json();
+  // 只過濾出「已到貨」且「尚未發貨」的訂單
+  const filtered = data.filter(o => o.status === '已到貨');
+  
+  document.getElementById("list").innerHTML = filtered.map(o => `
+    <div class="card">
+      <input type="checkbox" name="os" value="${o.orderId}" data-buyer="${o.buyerName}" checked>
+      <div style="flex:1;">
+        <strong style="font-size:16px;">${o.buyerName}</strong><br>
+        <small style="color:#666;">${o.productName} (${o.spec || ''}) x ${o.qty}</small>
+      </div>
+    </div>
+  `).join("") || '<div style="text-align:center; padding:20px; color:#999;">目前沒有可發貨的訂單</div>';
+}
+
+async function markAsShipped() {
+  const selected = Array.from(document.querySelectorAll('input[name="os"]:checked'));
+  if(selected.length === 0) return alert("請勾選要發貨的訂單");
+
+  if(!confirm(`確定將這 ${selected.length} 筆訂單標記為「已發貨」？`)) return;
+
+  // 批次呼叫後端更新狀態
+  for(let el of selected) {
+    await fetch(`/api/admin/orders/${el.value}/status`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ status: '已發貨' })
+    });
+  }
+  alert("發貨狀態更新完成！");
+  loadShippingList();
+}
+
+function generate() {
+  const ids = Array.from(document.querySelectorAll('input[name="os"]:checked')).map(el => el.getAttribute('data-buyer'));
   if(ids.length === 0) return alert("請勾選訂單");
-  // 呼叫後端產生 PDF 或 出貨小紙張 API
-  alert("正在為 " + ids.length + " 筆訂單產生發貨單...");
+  alert("正在產生買家：\n" + ids.join(", ") + "\n的發貨清單PDF...");
 }
 window.onload = init;
 </script>
