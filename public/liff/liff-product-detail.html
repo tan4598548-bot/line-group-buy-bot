@@ -98,7 +98,7 @@
             dateSpan.innerText = "⏳ 結單日期：" + currentProduct.closeDate.split('T')[0];
         }
 
-        // 💡 修正：相容全/半形逗號與分號
+        // 💡 修正解析邏輯：相容全/半形逗號與分號
         const splitRegex = /[，,；;]/;
 
         const colorSelect = document.getElementById('colorSelect');
@@ -150,17 +150,32 @@
             status: '待點貨'
         };
 
-        const res = await fetch('/api/admin/orders', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(orderData)
-        });
+        try {
+            const res = await fetch('/api/admin/orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderData)
+            });
 
-        if (res.ok) {
-            alert("下單成功！");
-            location.href = "liff-buyer-orders.html";
-        } else {
-            alert("下單失敗，請重試");
+            const result = await res.json();
+
+            if (res.ok) {
+                alert("下單成功！");
+                location.href = "liff-buyer-orders.html";
+            } else {
+                // 💡 提示「商品已被搶完了」並根據訊息跳轉
+                const errorMsg = result.error || "下單失敗，請重試";
+                alert(errorMsg);
+                
+                if (errorMsg.includes("搶完了")) {
+                    location.href = "liff-overstock-buyer.html";
+                } else {
+                    btn.disabled = false;
+                    btn.innerText = "🛒 確認提交訂單";
+                }
+            }
+        } catch (e) {
+            alert("網路異常，請重新嘗試");
             btn.disabled = false;
         }
     }

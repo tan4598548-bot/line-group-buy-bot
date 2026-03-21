@@ -64,7 +64,7 @@ export const sheetService = {
     // 2. 🔥 先搶先贏：如果是現貨商品，檢查庫存是否足夠
     if (product.isStock) {
         if (product.stock < d.qty) {
-            throw new Error(`庫存不足！剩餘數量：${product.stock}`);
+            throw new Error(`很抱歉，商品已被搶完了！(剩餘：${product.stock}`);
         }
         
         // 3. 立即扣除庫存 (在寫入訂單前先佔位)
