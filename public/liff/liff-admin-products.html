@@ -7,76 +7,65 @@
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         body { font-family: sans-serif; padding: 15px; background: #f4f4f4; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .input-group { margin-bottom: 15px; }
-        label { display: block; font-size: 14px; margin-bottom: 5px; font-weight: bold; color: #333; }
-        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-        .btn { background: #00b900; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        .btn:disabled { background: #ccc; }
-        h2 { margin-top: 0; color: #00b900; border-bottom: 2px solid #00b900; padding-bottom: 10px; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .input-group { margin-bottom: 12px; }
+        label { display: block; font-size: 14px; margin-bottom: 4px; font-weight: bold; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn { background: #00b900; color: white; border: none; padding: 12px; border-radius: 4px; width: 100%; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>✨ 新增商品上架</h2>
-    
-    <div id="addProductForm">
+    <h3 style="color:#00b900">📦 新增商品上架</h3>
+    <div id="addArea">
         <div class="input-group">
-            <label>商品代碼 (可不填，由系統生成)</label>
-            <input type="text" id="pCode" placeholder="例如: A01">
+            <label>商品代碼 (不填由系統生成)</label>
+            <input type="text" id="pCode" placeholder="如 P618484">
         </div>
-        
         <div class="input-group">
             <label>商品名稱 *</label>
-            <input type="text" id="pName" placeholder="請輸入商品名稱">
+            <input type="text" id="pName">
         </div>
-
         <div class="input-group">
-            <label>上架類型</label>
-            <select id="isStock" onchange="document.getElementById('stockBox').style.display = (this.value==='true'?'block':'none')">
-                <option value="false">預購商品 (無庫存限制)</option>
-                <option value="true">現貨商品 (需輸入庫存)</option>
+            <label>是否現貨</label>
+            <select id="isStock" onchange="document.getElementById('stockInput').style.display = (this.value==='true'?'block':'none')">
+                <option value="false">預購</option>
+                <option value="true">現貨</option>
             </select>
         </div>
-
-        <div id="stockBox" class="input-group" style="display:none;">
-            <label style="color: #e74c3c;">現貨庫存數量</label>
+        <div id="stockInput" class="input-group" style="display:none">
+            <label>庫存數量</label>
             <input type="number" id="pStock" value="0">
         </div>
-
         <div class="input-group">
             <label>銷售單價</label>
-            <input type="number" id="pPrice" placeholder="0">
+            <input type="number" id="pPrice" value="0">
         </div>
-
         <div class="input-group">
             <label>成本價</label>
-            <input type="number" id="pCost" placeholder="0">
+            <input type="number" id="pCost" value="0">
         </div>
-
-        <button type="button" class="btn" id="submitBtn" onclick="submitProduct()">確認上架商品</button>
+        <button type="button" class="btn" id="submitBtn" onclick="submitProduct()">確認送出上架</button>
     </div>
 </div>
 
 <script>
     async function submitProduct() {
-        const btn = document.getElementById('submitBtn');
         const name = document.getElementById('pName').value;
-        
-        if (!name) return alert("請輸入商品名稱！");
+        if (!name) return alert("請輸入商品名稱");
 
+        const btn = document.getElementById('submitBtn');
         btn.disabled = true;
-        btn.innerText = "正在寫入 Google 試算表...";
+        btn.innerText = "連線中...";
 
         const payload = {
             productCode: document.getElementById('pCode').value || 'P' + Date.now().toString().slice(-6),
             productName: name,
-            price: Number(document.getElementById('pPrice').value) || 0,
-            cost: Number(document.getElementById('pCost').value) || 0,
             isStock: document.getElementById('isStock').value === 'true',
             stock: Number(document.getElementById('pStock').value) || 0,
-            status: '上架'
+            price: Number(document.getElementById('pPrice').value) || 0,
+            cost: Number(document.getElementById('pCost').value) || 0
         };
 
         try {
@@ -85,28 +74,21 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-
-            const result = await res.json();
-
             if (res.ok) {
-                alert("✅ 上架成功！資料已寫入 Products 表格。");
-                // 成功後重整頁面清空欄位，且不帶任何參數
-                window.location.href = window.location.pathname; 
+                alert("✅ 上架成功！");
+                window.location.reload();
             } else {
-                alert("❌ 上架失敗: " + (result.error || "未知錯誤"));
+                alert("❌ 失敗：400 Bad Request，請確認後端路由是否正確掛載。");
             }
         } catch (e) {
-            alert("❌ 網路連線失敗，請確認 Render 是否正常啟動");
+            alert("❌ 網路異常，請確認後端服務已啟動。");
         } finally {
             btn.disabled = false;
-            btn.innerText = "確認上架商品";
+            btn.innerText = "確認送出上架";
         }
     }
-
-    async function init() {
-        await liff.init({ liffId: "您的管理端LIFF_ID" }).catch(console.error);
-    }
-    init();
+    
+    liff.init({ liffId: "您的管理端LIFF_ID" });
 </script>
 </body>
 </html>
