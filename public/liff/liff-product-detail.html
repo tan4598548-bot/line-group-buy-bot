@@ -5,117 +5,103 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        body { font-family: -apple-system, sans-serif; margin: 0; padding-bottom: 80px; background: #fff; }
-        .back-btn { position: absolute; top: 15px; left: 15px; background: rgba(255,255,255,0.8); border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; z-index: 10; border: 1px solid #ddd; text-decoration: none; color: #333; }
-        .hero-img { width: 100%; aspect-ratio: 1/1; object-fit: cover; }
-        .container { padding: 20px; }
-        .price-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .price { color: #e44d26; font-size: 24px; font-weight: bold; }
-        .close-date { color: #d9534f; font-size: 14px; background: #fff1f0; padding: 5px 10px; border-radius: 4px; display: inline-block; }
-        .section-title { font-weight: bold; margin: 20px 0 10px; display: block; }
-        select, input { width: 100%; height: 48px; border: 1px solid #ddd; border-radius: 8px; padding: 0 12px; font-size: 16px; box-sizing: border-box; }
-        .footer { position: fixed; bottom: 0; width: 100%; padding: 15px; background: white; border-top: 1px solid #eee; box-sizing: border-box; }
-        .buy-btn { width: 100%; height: 50px; background: #06c755; color: white; border: none; border-radius: 25px; font-size: 18px; font-weight: bold; cursor: pointer; }
-        .buy-btn:disabled { background: #ccc; }
+        body { font-family: sans-serif; margin: 0; padding-bottom: 80px; }
+        .back-btn { position: fixed; top: 10px; left: 10px; z-index: 100; background: rgba(0,0,0,0.5); color: white; border: none; padding: 8px 12px; border-radius: 20px; }
+        .hero { width: 100%; aspect-ratio: 1/1; object-fit: cover; }
+        .content { padding: 15px; }
+        .section { margin-top: 20px; }
+        select, input { width: 100%; height: 45px; border-radius: 8px; border: 1px solid #ddd; padding: 0 10px; font-size: 16px; margin-top: 8px; }
+        .footer { position: fixed; bottom: 0; width: 100%; padding: 10px; background: white; border-top: 1px solid #eee; }
+        .btn-submit { width: 100%; height: 50px; background: #06c755; color: white; border: none; border-radius: 25px; font-size: 18px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <a href="liff-product-list.html" class="back-btn">⬅</a>
-    <div id="main-content">
-        <img id="pImg" class="hero-img" src="">
-        <div class="container">
-            <div class="price-row">
-                <span class="price" id="pPrice"></span>
-                <span id="pCloseDate" class="close-date"></span>
-            </div>
-            <h2 id="pName" style="margin: 10px 0;">載入中...</h2>
-            <p id="pDesc" style="color:#666; line-height: 1.6;"></p>
-            
-            <label class="section-title">選擇規格 (必選)</label>
+    <button class="back-btn" onclick="location.href='liff-product-list.html'">⬅ 返回</button>
+    <img id="pImg" class="hero" src="">
+    <div class="content">
+        <h2 id="pName" style="margin:0;">載入中...</h2>
+        <div id="pPrice" style="color:#e44d26; font-size:24px; font-weight:bold; margin:10px 0;"></div>
+        <div id="pDate" style="color:#d9534f; font-size:13px;"></div>
+        
+        <div class="section">
+            <label><strong>請選擇商品規格/尺寸 (必選)</strong></label>
             <select id="specSelect">
-                <option value="">-- 請點擊選擇 --</option>
+                <option value="WAIT_SELECT">-- 請點擊選擇規格與尺寸 --</option>
             </select>
+        </div>
 
-            <label class="section-title">購買數量</label>
+        <div class="section">
+            <label><strong>訂購數量</strong></label>
             <input type="number" id="qty" value="1" min="1">
         </div>
     </div>
-    <div class="footer"><button id="btn" class="buy-btn" onclick="submit()">🛒 確認提交訂單</button></div>
+
+    <div class="footer">
+        <button id="btn" class="btn-submit" onclick="submitOrder()">🛒 確認提交訂單</button>
+    </div>
 
 <script>
-    let productData, userProfile;
+    let pObj, user;
     async function init() {
         await liff.init({ liffId: "2008857998-qOI2DqCC" });
         if(!liff.isLoggedIn()) { liff.login(); return; }
-        userProfile = await liff.getProfile();
+        user = await liff.getProfile();
         
         const code = new URLSearchParams(window.location.search).get('code');
         const res = await fetch("/api/products");
-        const prods = await res.json();
-        productData = prods.find(x => x.productCode === code);
-        
-        if(!productData) { alert("商品已下架"); location.href="liff-product-list.html"; return; }
+        const list = await res.json();
+        pObj = list.find(x => x.productCode === code);
 
-        // 渲染資料
-        document.getElementById('pName').innerText = productData.productName;
-        document.getElementById('pPrice').innerText = "$" + productData.price;
-        document.getElementById('pImg').src = productData.images?.split(',')[0] || '';
-        document.getElementById('pDesc').innerText = productData.description || "暫無描述";
-        
-        // 結單日期
-        if(productData.closeDate) {
-            document.getElementById('pCloseDate').innerText = "⏳ 結單日: " + productData.closeDate.split('T')[0];
-        }
+        document.getElementById('pImg').src = pObj.images?.split(',')[0] || '';
+        document.getElementById('pName').innerText = pObj.productName;
+        document.getElementById('pPrice').innerText = "$" + pObj.price;
+        document.getElementById('pDate').innerText = "📅 結單日期：" + (pObj.closeDate ? pObj.closeDate.split('T')[0] : "不限時");
 
-        // 規格解析
         const sel = document.getElementById('specSelect');
-        if(productData.specSize) {
-            // 支援 "紅,藍" 或 "紅/S,藍/M" 格式
-            productData.specSize.split(',').forEach(s => {
+        if(pObj.specSize) {
+            pObj.specSize.split(',').forEach(s => {
                 const opt = document.createElement('option');
-                opt.value = s.trim(); opt.innerText = s.trim();
+                opt.value = s.trim();
+                opt.innerText = s.trim();
                 sel.appendChild(opt);
             });
         }
-
-        // 檢查是否結單
-        if(productData.status === '已結單' || (productData.closeDate && new Date(productData.closeDate) < new Date())) {
-            const b = document.getElementById('btn');
-            b.disabled = true; b.innerText = "本團已結束，無法下單";
-        }
     }
 
-    async function submit() {
+    async function submitOrder() {
         const spec = document.getElementById('specSelect').value;
-        if(!spec) { alert("⚠️ 請選擇商品規格與尺寸！"); return; }
         
-        const b = document.getElementById('btn');
-        b.disabled = true; b.innerText = "訂單傳送中...";
+        // 嚴格檢查：如果是預設值或空值，攔截下單
+        if(spec === "WAIT_SELECT" || !spec) {
+            alert("❌ 請務必選擇正確的規格與尺寸！");
+            return;
+        }
 
-        const orderBody = {
-            buyerId: userProfile.userId,
-            buyerName: userProfile.displayName,
-            productCode: productData.productCode,
-            productName: productData.productName,
+        const b = document.getElementById('btn');
+        b.disabled = true; b.innerText = "傳送中...";
+
+        const payload = {
+            buyerId: user.userId,
+            buyerName: user.displayName,
+            productCode: pObj.productCode,
+            productName: pObj.productName,
             spec: spec,
             qty: parseInt(document.getElementById('qty').value),
-            price: productData.price,
-            total: productData.price * parseInt(document.getElementById('qty').value),
+            price: pObj.price,
+            total: pObj.price * parseInt(document.getElementById('qty').value),
             status: '待點貨'
         };
 
-        try {
-            const res = await fetch('/api/admin/orders', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(orderBody)
-            });
-            if(res.ok) {
-                alert("🎉 下單成功！");
-                location.href = "liff-buyer-orders.html";
-            } else { throw new Error(); }
-        } catch (e) {
-            alert("下單失敗，請稍後再試");
+        const res = await fetch('/api/admin/orders', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+
+        if(res.ok) {
+            alert("下單成功！");
+            location.href = "liff-buyer-orders.html";
+        } else {
+            alert("下單失敗");
             b.disabled = false; b.innerText = "🛒 確認提交訂單";
         }
     }

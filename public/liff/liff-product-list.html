@@ -5,23 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        body { background:#f4f4f4; margin:0; padding-bottom:60px; }
+        body { background:#f4f4f4; margin:0; padding-bottom:60px; font-family: sans-serif; }
         .p-grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; padding:10px; }
-        .p-card { background:white; border-radius:10px; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,0.05); }
+        .p-card { background:white; border-radius:10px; overflow:hidden; position:relative; box-shadow:0 2px 5px rgba(0,0,0,0.05); }
         .p-img { width:100%; aspect-ratio:1/1; object-fit:cover; }
-        .p-info { padding:10px; }
-        .p-price { color:#e44d26; font-weight:bold; }
+        .p-info { padding:8px; }
+        .p-price { color:#e44d26; font-weight:bold; font-size:15px; }
+        /* 結單日期標籤 */
+        .date-tag { font-size:10px; color:#d9534f; background:#fff1f0; padding:2px 5px; border-radius:3px; margin-top:4px; display:inline-block; }
         .tab-bar { position:fixed; bottom:0; width:100%; height:55px; background:white; display:flex; border-top:1px solid #ddd; }
         .tab { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-decoration:none; color:#888; font-size:12px; }
-        .tab.active { color:#06c755; }
     </style>
 </head>
 <body>
-    <div style="background:#06c755; color:white; padding:15px; text-align:center; font-weight:bold;">✨ 團購進行中</div>
+    <div style="background:#06c755; color:white; padding:12px; text-align:center; font-weight:bold;">🛒 正在進行中的團購</div>
     <div id="grid" class="p-grid">載入中...</div>
     
     <nav class="tab-bar">
-        <a href="liff-product-list.html" class="tab active">🏠 商城</a>
+        <a href="liff-product-list.html" class="tab" style="color:#06c755;">🏠 商城</a>
         <a href="liff-buyer-orders.html" class="tab">📋 我的訂單</a>
         <a href="liff-overstock-buyer.html" class="tab">🔥 現貨出清</a>
     </nav>
@@ -32,21 +33,23 @@
         const res = await fetch("/api/products?t="+Date.now());
         const data = await res.json();
         
-        // 核心邏輯：過濾掉 (1)已過期結單 (2)標記為結單 (3)斷貨 (4)現貨出清商品
         const filtered = data.filter(p => {
             const isExpired = p.closeDate && new Date(p.closeDate) < new Date();
             return p.status === '上架' && !isExpired && p.isStock !== true;
         });
 
-        document.getElementById("grid").innerHTML = filtered.map(p => `
+        document.getElementById("grid").innerHTML = filtered.map(p => {
+            const d = p.closeDate ? p.closeDate.split('T')[0] : "長期";
+            return `
             <div class="p-card" onclick="location.href='liff-product-detail.html?code=${p.productCode}'">
-                <img class="p-img" src="${p.images?.split(',')[0] || 'https://via.placeholder.com/200'}">
+                <img class="p-img" src="${p.images?.split(',')[0] || ''}">
                 <div class="p-info">
-                    <div style="font-size:13px; margin-bottom:5px; height:36px; overflow:hidden;">${p.productName}</div>
+                    <div style="font-size:13px; font-weight:bold; height:36px; overflow:hidden;">${p.productName}</div>
                     <div class="p-price">$${p.price}</div>
+                    <div class="date-tag">⏳ 結單：${d}</div>
                 </div>
-            </div>
-        `).join("") || '<div style="grid-column:1/3; text-align:center; padding:50px; color:#999;">目前沒有進行中的團購</div>';
+            </div>`;
+        }).join("");
     }
     window.onload = init;
 </script>
