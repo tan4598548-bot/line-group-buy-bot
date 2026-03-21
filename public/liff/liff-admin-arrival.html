@@ -1,57 +1,78 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8"><title>到貨點貨</title>
+    <meta charset="UTF-8"><title>📥 到貨點貨管理</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-        .order-row { background:white; padding:15px; margin-bottom:10px; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
-        .tag { font-size:11px; padding:2px 5px; border-radius:3px; }
-        select { width:100%; height:35px; margin-top:10px; }
+        body { font-family: -apple-system, sans-serif; background: #f8f9fa; padding: 15px; }
+        .nav { margin-bottom: 15px; }
+        .summary-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 5px solid #007bff; }
+        .product-title { font-weight: bold; font-size: 16px; color: #333; }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; font-size: 13px; color: #666; }
+        .count { color: #007bff; font-weight: bold; font-size: 15px; }
+        select { width: 100%; height: 40px; border-radius: 6px; border: 1px solid #ddd; background: #fff; margin-top: 5px; }
+        .btn-back { border: none; background: none; font-size: 16px; color: #666; cursor: pointer; }
     </style>
 </head>
 <body>
-    <button onclick="location.href='liff-admin-dashboard.html'">⬅</button>
-    <h3>📥 到貨點貨 (3)</h3>
-    <div id="list">讀取中...</div>
+    <div class="nav"><button class="btn-back" onclick="location.href='liff-admin-dashboard.html'">⬅ 返回管理首頁</button></div>
+    <h3>📥 廠商到貨彙整 (點貨)</h3>
+    <div id="list">🔍 正在計算各商品訂購總數...</div>
+
 <script>
     async function init() {
         await liff.init({ liffId: "2008857998-ePcCkr6K" });
-        load();
+        loadSummary();
     }
-    async function load() {
-        const res = await fetch("/api/admin/orders");
-        const orders = await res.json();
-        // 過濾掉取消的訂單
-        document.getElementById("list").innerHTML = orders.filter(o => o.status !== '買家取消').map(o => `
-            <div class="order-row">
-                <strong>${o.buyerName}</strong>: ${o.productName}<br>
-                規格: ${o.spec} | 數量: ${o.qty}<br>
-                <select onchange="handleArrival('${o.orderId}', this.value, ${o.qty})">
-                    <option value="待點貨" ${o.status==='待點貨'?'selected':''}>⏳ 待點貨</option>
-                    <option value="已到貨" ${o.status==='已到貨'?'selected':''}>✅ 全齊到貨</option>
-                    <option value="部分到貨">⚠️ 部分到貨 (拆單)</option>
-                    <option value="斷貨" ${o.status==='斷貨'?'selected':''}>❌ 斷貨</option>
-                </select>
-            </div>
-        `).join("");
-    }
-    async function handleArrival(orderId, status, originalQty) {
-        let payload = { status: status };
-        if (status === "部分到貨") {
-            const arrivedQty = prompt(`[拆單點貨] 原始訂購: ${originalQty}\n請輸入本次實際到貨數量:`);
-            if (!arrivedQty || parseInt(arrivedQty) >= originalQty || parseInt(arrivedQty) <= 0) {
-                alert("數量錯誤或無須拆單"); return load();
+
+    async function loadSummary() {
+        try {
+            // 對接後端 VendorOrders 彙整 API
+            const res = await fetch("/api/admin/vendor-summary?t=" + Date.now());
+            const data = await res.json();
+            
+            if (data.length === 0) {
+                document.getElementById("list").innerHTML = "目前尚無任何已結單需到貨商品";
+                return;
             }
-            payload.status = "已到貨"; 
-            payload.split = true; 
-            payload.arrivalQty = parseInt(arrivedQty);
+
+            document.getElementById("list").innerHTML = data.map(item => `
+                <div class="summary-card">
+                    <div class="product-title">${item.productName}</div>
+                    <div style="font-size:12px; color:#999;">代碼: ${item.productCode}</div>
+                    <div class="stat-grid">
+                        <div>採購總數: <span class="count">${item.totalOrdered}</span></div>
+                        <div>目前到貨: <span class="count" style="color:#28a745">${item.totalArrived || 0}</span></div>
+                    </div>
+                    <label style="font-size:12px;">變更到貨狀態：</label>
+                    <select onchange="updateVendorStatus('${item.productCode}', this.value, ${item.totalOrdered})">
+                        <option value="未到貨" ${item.vendorStatus==='未到貨'?'selected':''}>未到貨</option>
+                        <option value="部分到貨" ${item.vendorStatus==='部分到貨'?'selected':''}>部分到貨 (拆單)</option>
+                        <option value="已到齊" ${item.vendorStatus==='已到齊'?'selected':''}>已到齊</option>
+                        <option value="缺貨" ${item.vendorStatus==='缺貨'?'selected':''}>廠商缺貨/斷貨</option>
+                    </select>
+                </div>
+            `).join("");
+        } catch (err) {
+            document.getElementById("list").innerHTML = "讀取失敗，請確認後端 API 運作正常";
         }
-        await fetch(`/api/admin/orders/${orderId}/status`, {
-            method: 'PUT', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
+    }
+
+    async function updateVendorStatus(code, status, total) {
+        let arrivalQty = total;
+        if (status === "部分到貨") {
+            const val = prompt(`請輸入本次實際收到的「${code}」數量：`);
+            if (!val || isNaN(val) || parseInt(val) <= 0) return loadSummary();
+            arrivalQty = parseInt(val);
+        }
+
+        await fetch(`/api/admin/vendor-orders/${code}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ status, arrivalQty })
         });
-        load();
+        loadSummary();
     }
     window.onload = init;
 </script>
