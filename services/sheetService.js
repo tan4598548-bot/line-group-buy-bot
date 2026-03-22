@@ -9,6 +9,9 @@ const auth = new google.auth.GoogleAuth({
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
+// 💡 定義通用的分隔符號正則表達式，支援：半全形逗號、分號、頓號
+const SPLIT_REGEX = /[，,；;、]/;
+
 export const sheetService = {
   // 1. 取得商品清單 (A:O 欄位)
   async getProducts(filter = 'all') {
@@ -85,41 +88,40 @@ export const sheetService = {
     });
   },
 
-  // 4.5 修正商品詳細資料 (新增此段)
+  // 4.5 修正商品詳細資料 (支援品名、規格、尺寸、單價、庫存)
   async updateProductDetail(productCode, data) {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Products!A:A' });
     const rows = res.data.values || [];
     const rowIndex = rows.findIndex(r => r[0] === String(productCode));
-    if (rowIndex === -1) throw new Error("找不到商品");
+    if (rowIndex === -1) throw new Error("找不到商品代碼：" + productCode);
 
-    // 依序檢查要更新哪些欄位
-    if (data.price) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `Products!E${rowIndex + 1}`, // E 欄是單價
-        valueInputOption: 'USER_ENTERED',
-        resource: { values: [[data.price]] }
-      });
+    const rowNum = rowIndex + 1;
+    const requests = [];
+
+    // 定義欄位對應：B=品名, C=規格尺寸, D=尺寸(顏色), E=單價, N=庫存
+    const fieldMap = {
+      productName: 'B',
+      specSize: 'C',
+      color: 'D',
+      price: 'E',
+      stock: 'N'
+    };
+
+    for (const [key, column] of Object.entries(fieldMap)) {
+      if (data[key] !== undefined) {
+        requests.push(sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `Products!${column}${rowNum}`,
+          valueInputOption: 'USER_ENTERED',
+          resource: { values: [[data[key]]] }
+        }));
+      }
     }
-    if (data.stock !== undefined) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `Products!N${rowIndex + 1}`, // N 欄是庫存
-        valueInputOption: 'USER_ENTERED',
-        resource: { values: [[data.stock]] }
-      });
-    }
-    if (data.productName) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `Products!B${rowIndex + 1}`, // B 欄是品名
-        valueInputOption: 'USER_ENTERED',
-        resource: { values: [[data.productName]] }
-      });
-    }
+
+    await Promise.all(requests);
   },
-  
-  // 5. 新增訂單 (對應 19.jpg: G=qty, J=date, K=status)
+
+  // 5. 新增訂單 (含現貨庫存扣除邏輯)
   async appendOrder(d) {
     const products = await this.getProducts('all');
     const pIndex = products.findIndex(p => p.productCode === d.productCode);
@@ -128,6 +130,7 @@ export const sheetService = {
 
     if (product.isStock) {
         if (product.stock < d.qty) throw new Error(`庫存不足，剩餘：${product.stock}`);
+        // 更新庫存欄位 (N 欄)
         await sheets.spreadsheets.values.update({
             spreadsheetId: SPREADSHEET_ID, range: `Products!N${pIndex + 2}`, 
             valueInputOption: 'USER_ENTERED', resource: { values: [[product.stock - d.qty]] }
@@ -145,33 +148,39 @@ export const sheetService = {
     });
   },
 
-  // 6. 修改訂單 (支援數量與狀態更新)
+  // 6. 修改訂單 (支援數量與狀態更新，含取消訂單庫存回補)
   async updateOrderWithCheck(orderId, data) {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K' });
     const rows = res.data.values || [];
+    if (rows.length === 0) throw new Error("訂單資料為空");
+    
     const headers = rows[0];
     const orderIndex = rows.findIndex(r => r[0] === String(orderId));
     if (orderIndex === -1) throw new Error("找不到訂單");
 
+    const rowNum = orderIndex + 1;
     const productCode = rows[orderIndex][headers.indexOf('product_code')];
     const products = await this.getProducts('all');
     const product = products.find(p => p.productCode === productCode);
 
+    // 結單限制檢查
     if (product && product.status === '已結單') {
         throw new Error("⚠️ 團主已結單，無法修改或取消訂單");
     }
 
+    // 處理數量更新與金額重新計算
     if (data.qty) {
       const price = parseInt(rows[orderIndex][headers.indexOf('price')] || 0);
       const newTotal = price * parseInt(data.qty);
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `Orders!G${orderIndex + 1}:I${orderIndex + 1}`,
+        range: `Orders!G${rowNum}:I${rowNum}`,
         valueInputOption: 'USER_ENTERED',
         resource: { values: [[data.qty, price, newTotal]] }
       });
     }
 
+    // 處理取消訂單的庫存回補
     if (data.status === '買家取消' && product && product.isStock) {
       const pIndex = products.findIndex(p => p.productCode === productCode);
       const currentQty = parseInt(rows[orderIndex][headers.indexOf('qty')] || 0);
@@ -181,15 +190,16 @@ export const sheetService = {
       });
     }
 
+    // 更新訂單狀態欄 (K 欄)
     if (data.status) {
       await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID, range: `Orders!K${orderIndex + 1}`,
+        spreadsheetId: SPREADSHEET_ID, range: `Orders!K${rowNum}`,
         valueInputOption: 'USER_ENTERED', resource: { values: [[data.status]] }
       });
     }
   },
 
-  // 7. 取得訂單 (過濾取消訂單)
+  // 7. 取得訂單 (過濾取消訂單與已刪除訂單)
   async getOrders(userId = null) {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K' });
     const rows = res.data.values || [];
