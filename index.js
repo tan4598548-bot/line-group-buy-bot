@@ -11,11 +11,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 app.use(express.json());
-// 靜態檔案路徑：包含 public 及其子目錄
 app.use(express.static(path.join(__dirname, "public")));
 
 // --- 路由掛載 ---
-// 這裡包含了 /api/products 等基礎商品路由
 app.use('/api', productRoutes); 
 
 // --- LIFF 頁面導向路由 ---
@@ -37,7 +35,7 @@ app.get("/api/admin/orders", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 2. 新增訂單
+// 2. 新增訂單 (買家下單)
 app.post("/api/admin/orders", async (req, res) => {
     try {
         await sheetService.appendOrder(req.body);
@@ -45,7 +43,7 @@ app.post("/api/admin/orders", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 3. 修改/取消訂單 (含結單鎖定 checkLock 邏輯)
+// 3. 修改/取消訂單 (含結單鎖定與狀態更新)
 app.put("/api/admin/orders/:orderId/status", async (req, res) => {
     try {
         await sheetService.updateOrderWithCheck(req.params.orderId, req.body);
@@ -56,15 +54,13 @@ app.put("/api/admin/orders/:orderId/status", async (req, res) => {
     }
 });
 
-// --- [B] 到貨與點貨 API (新增以支援 liff-admin-arrival.html) ---
+// --- [B] 到貨與點貨 API ---
 
 app.get("/api/admin/vendor-summary", async (req, res) => {
     try {
         const orders = await sheetService.getOrders();
-        // 過濾已取消訂單，僅統計有效訂單
         const activeOrders = orders.filter(o => o.status !== '買家取消' && o.status !== '已刪除');
         
-        // 依商品代碼彙整採購總數
         const summaryMap = activeOrders.reduce((acc, cur) => {
             const code = cur.productCode;
             if (!acc[code]) {
@@ -84,11 +80,10 @@ app.get("/api/admin/vendor-summary", async (req, res) => {
     } catch (e) { res.status(500).json({ error: "彙整資料失敗: " + e.message }); }
 });
 
-// --- [C] 商品管理 API (對接新增商品功能) ---
+// --- [C] 商品管理 API ---
 
 app.post("/api/admin/products", async (req, res) => {
     try {
-        // 調用 sheetService 將新商品寫入 Products 頁面 (A-O 欄位)
         await sheetService.appendProduct(req.body);
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
