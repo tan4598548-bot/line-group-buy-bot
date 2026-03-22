@@ -12,11 +12,12 @@
     .btn-add { background: #00c300; color: white; padding: 8px 16px; border-radius: 20px; text-decoration: none; font-weight: bold; font-size: 14px; }
     .product-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); position: relative; }
     .status-badge { position: absolute; top: 15px; right: 15px; padding: 2px 8px; border-radius: 4px; font-size: 12px; background: #e8f5e9; color: #2e7d32; }
-    .p-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 5px; }
+    .p-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 5px; padding-right: 60px; }
     .p-detail { font-size: 14px; color: #666; margin-bottom: 10px; }
     .btn-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
     .action-btn { border: none; padding: 8px 0; border-radius: 4px; color: white; font-size: 13px; font-weight: bold; cursor: pointer; }
     .btn-edit { background: #007bff; } .btn-close { background: #6c757d; } .btn-out { background: #ffc107; color: #333; } .btn-del { background: #dc3545; }
+    .stock-info { color: #d9534f; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -29,9 +30,37 @@
   <div id="productList">正在讀取商品清單...</div>
 
   <script>
+    // 1. 修正功能：修改單價或庫存
+    async function editProduct(code, oldName, oldPrice, oldStock) {
+      const newPrice = prompt(`[${code}] 修改單價 (目前: ${oldPrice}):`, oldPrice);
+      if (newPrice === null) return;
+
+      const newStock = prompt(`[${code}] 修改庫存數量 (目前: ${oldStock}):`, oldStock);
+      if (newStock === null) return;
+
+      try {
+        const res = await fetch(`/api/products/${code}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            price: parseInt(newPrice), 
+            stock: parseInt(newStock) 
+          })
+        });
+
+        if (res.ok) {
+          alert("修改成功！");
+          loadProducts();
+        } else {
+          alert("修改失敗");
+        }
+      } catch (e) { alert("網路錯誤"); }
+    }
+
+    // 2. 狀態更新：結單、斷貨、刪除
     async function updateStatus(code, newStatus) {
       let confirmMsg = `確定要將商品 [${code}] 改為「${newStatus}」嗎？`;
-      if (newStatus === '已刪除') confirmMsg = `確定要刪除商品 [${code}] 嗎？刪除後買家將看不到此商品。`;
+      if (newStatus === '已刪除') confirmMsg = `確定要刪除商品 [${code}] 嗎？`;
       
       if (!confirm(confirmMsg)) return;
 
@@ -44,13 +73,11 @@
 
         if (res.ok) {
           alert("狀態已更新");
-          loadProducts(); // 重新載入清單
+          loadProducts();
         } else {
           alert("更新失敗");
         }
-      } catch (e) {
-        alert("網路錯誤");
-      }
+      } catch (e) { alert("網路錯誤"); }
     }
 
     async function loadProducts() {
@@ -61,7 +88,7 @@
         listDiv.innerHTML = '';
 
         if (products.length === 0) {
-            listDiv.innerHTML = '<div style="text-align:center; padding:50px; color:#999;">目前無上架商品</div>';
+            listDiv.innerHTML = '<div style="text-align:center; padding:50px; color:#999;">目前無商品</div>';
             return;
         }
 
@@ -71,10 +98,10 @@
           card.innerHTML = `
             <div class="status-badge">${p.status}</div>
             <div class="p-title">${p.productName}</div>
-            <div class="p-detail">代碼: ${p.productCode} | 價格: $${p.price}</div>
-            <div class="p-detail">規格: ${p.specSize} | 尺寸: ${p.color}</div>
+            <div class="p-detail">代碼: ${p.productCode} | 價格: <b style="color:#e44d26">$${p.price}</b></div>
+            <div class="p-detail">庫存: <span class="stock-info">${p.stock || 0}</span> | 規格: ${p.specSize || '無'}</div>
             <div class="btn-group">
-              <button class="action-btn btn-edit" onclick="alert('修正功能開發中')">修正</button>
+              <button class="action-btn btn-edit" onclick="editProduct('${p.productCode}', '${p.productName}', ${p.price}, ${p.stock || 0})">修正</button>
               <button class="action-btn btn-close" onclick="updateStatus('${p.productCode}', '已結單')">結單</button>
               <button class="action-btn btn-out" onclick="updateStatus('${p.productCode}', '斷貨')">斷貨</button>
               <button class="action-btn btn-del" onclick="updateStatus('${p.productCode}', '已刪除')">刪除</button>

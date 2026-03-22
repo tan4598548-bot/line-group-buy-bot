@@ -85,6 +85,40 @@ export const sheetService = {
     });
   },
 
+  // 4.5 修正商品詳細資料 (新增此段)
+  async updateProductDetail(productCode, data) {
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Products!A:A' });
+    const rows = res.data.values || [];
+    const rowIndex = rows.findIndex(r => r[0] === String(productCode));
+    if (rowIndex === -1) throw new Error("找不到商品");
+
+    // 依序檢查要更新哪些欄位
+    if (data.price) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `Products!E${rowIndex + 1}`, // E 欄是單價
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [[data.price]] }
+      });
+    }
+    if (data.stock !== undefined) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `Products!N${rowIndex + 1}`, // N 欄是庫存
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [[data.stock]] }
+      });
+    }
+    if (data.productName) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `Products!B${rowIndex + 1}`, // B 欄是品名
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [[data.productName]] }
+      });
+    }
+  },
+  
   // 5. 新增訂單 (對應 19.jpg: G=qty, J=date, K=status)
   async appendOrder(d) {
     const products = await this.getProducts('all');

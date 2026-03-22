@@ -35,4 +35,15 @@ router.post('/admin/products', async (req, res) => {
   }
 });
 
+// 管理員修正商品詳細資料 (單價、庫存、品名)
+router.put('/products/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    await sheetService.updateProductDetail(code, req.body);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
