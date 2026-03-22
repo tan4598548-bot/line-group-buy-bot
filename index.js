@@ -26,7 +26,7 @@ app.get('/liff/:filename', (req, res) => {
 
 // --- [A] 訂單相關 API ---
 
-// 1. 取得訂單 (支援管理員全查或買家過濾)
+// 1. 取得訂單 (買家端會自動過濾已取消訂單)
 app.get("/api/admin/orders", async (req, res) => {
     try {
         const { userId } = req.query; 
@@ -43,7 +43,7 @@ app.post("/api/admin/orders", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 3. 修改/取消訂單 (含結單鎖定與狀態更新)
+// 3. 修改訂單 (支援數量 qty 與狀態 status 更新)
 app.put("/api/admin/orders/:orderId/status", async (req, res) => {
     try {
         await sheetService.updateOrderWithCheck(req.params.orderId, req.body);

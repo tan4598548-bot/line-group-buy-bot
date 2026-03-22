@@ -29,12 +29,41 @@
   <div id="productList">正在讀取商品清單...</div>
 
   <script>
+    async function updateStatus(code, newStatus) {
+      let confirmMsg = `確定要將商品 [${code}] 改為「${newStatus}」嗎？`;
+      if (newStatus === '已刪除') confirmMsg = `確定要刪除商品 [${code}] 嗎？刪除後買家將看不到此商品。`;
+      
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const res = await fetch(`/api/products/${code}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+
+        if (res.ok) {
+          alert("狀態已更新");
+          loadProducts(); // 重新載入清單
+        } else {
+          alert("更新失敗");
+        }
+      } catch (e) {
+        alert("網路錯誤");
+      }
+    }
+
     async function loadProducts() {
       try {
-        const res = await fetch('/api/products');
+        const res = await fetch('/api/products?t=' + Date.now());
         const products = await res.json();
         const listDiv = document.getElementById('productList');
         listDiv.innerHTML = '';
+
+        if (products.length === 0) {
+            listDiv.innerHTML = '<div style="text-align:center; padding:50px; color:#999;">目前無上架商品</div>';
+            return;
+        }
 
         products.forEach(p => {
           const card = document.createElement('div');
@@ -45,10 +74,10 @@
             <div class="p-detail">代碼: ${p.productCode} | 價格: $${p.price}</div>
             <div class="p-detail">規格: ${p.specSize} | 尺寸: ${p.color}</div>
             <div class="btn-group">
-              <button class="action-btn btn-edit">修正</button>
-              <button class="action-btn btn-close">結單</button>
-              <button class="action-btn btn-out">斷貨</button>
-              <button class="action-btn btn-del">刪除</button>
+              <button class="action-btn btn-edit" onclick="alert('修正功能開發中')">修正</button>
+              <button class="action-btn btn-close" onclick="updateStatus('${p.productCode}', '已結單')">結單</button>
+              <button class="action-btn btn-out" onclick="updateStatus('${p.productCode}', '斷貨')">斷貨</button>
+              <button class="action-btn btn-del" onclick="updateStatus('${p.productCode}', '已刪除')">刪除</button>
             </div>
           `;
           listDiv.appendChild(card);

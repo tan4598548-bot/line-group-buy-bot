@@ -13,7 +13,19 @@ router.get('/products', async (req, res) => {
   }
 });
 
-// 管理員上架 API [新增此段以對齊前端 fetch]
+// 管理員更新商品狀態 (結單/斷貨/刪除)
+router.put('/products/:code/status', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const { status } = req.body;
+    await sheetService.updateProductStatus(code, status);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 管理員新增商品
 router.post('/admin/products', async (req, res) => {
   try {
     await sheetService.appendProduct(req.body);

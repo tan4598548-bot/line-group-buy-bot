@@ -38,28 +38,23 @@ export const sheetService = {
           description: get('說明')
         };
       });
+
+      // 過濾掉標記為「已刪除」的商品
+      data = data.filter(p => p.status !== '已刪除');
+
       if (filter === 'active') return data.filter(p => p.status === '上架' && !p.isStock);
       if (filter === 'overstock') return data.filter(p => p.isStock && p.stock > 0 && p.status === '上架');
       return data;
     } catch (e) { console.error("getProducts Error:", e); return []; }
   },
 
-  // 2. 新增商品 (嚴格對齊 A:O 欄位)
+  // 2. 新增商品
   async appendProduct(d) {
     const row = [
-      d.productCode,      // A: 商品代碼
-      d.productName,      // B: 商品名稱
-      d.specSize || '',   // C: 規格尺寸
-      d.color || '',      // D: 尺寸
-      Number(d.price) || 0, // E: 單價
-      '上架',             // F: 狀態
-      d.closeDate || '',  // G: 結單日
-      d.isStock ? 'TRUE' : 'FALSE', // H: 是否現貨
-      Number(d.cost) || 0, // I: 成本
-      d.images || '',     // J: 圖片
-      '', '', '',         // K, L, M: 預留
-      Number(d.stock) || 0, // N: 庫存
-      d.description || '' // O: 說明
+      d.productCode, d.productName, d.specSize || '', d.color || '', 
+      Number(d.price) || 0, '上架', d.closeDate || '', 
+      d.isStock ? 'TRUE' : 'FALSE', Number(d.cost) || 0, d.images || '',
+      '', '', '', Number(d.stock) || 0, d.description || ''
     ];
     return await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID, range: 'Products!A:O',
@@ -67,7 +62,7 @@ export const sheetService = {
     });
   },
 
-  // 3. 取得特定商品的買家 (推播用)
+  // 3. 取得特定商品的買家
   async getBuyersByProduct(productCode) {
     const orders = await this.getOrders();
     return orders
@@ -75,22 +70,22 @@ export const sheetService = {
       .map(o => ({ lineId: o.buyerId }));
   },
 
-  // 4. 更新商品狀態 (F 欄)
+  // 4. 更新商品狀態 (對應 Products 頁面 F 欄)
   async updateProductStatus(productCode, newStatus) {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Products!A:A' });
     const rows = res.data.values || [];
-    const rowIndex = rows.findIndex(r => r[0] === productCode);
+    const rowIndex = rows.findIndex(r => r[0] === String(productCode));
     if (rowIndex === -1) throw new Error("找不到商品");
     
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `Products!F${rowIndex + 1}`, // F 欄
+      range: `Products!F${rowIndex + 1}`,
       valueInputOption: 'USER_ENTERED',
       resource: { values: [[newStatus]] }
     });
   },
 
-  // 5. 新增訂單 (修正欄位位移：G為數量, L為狀態)
+  // 5. 新增訂單 (對應 19.jpg: G=qty, J=date, K=status)
   async appendOrder(d) {
     const products = await this.getProducts('all');
     const pIndex = products.findIndex(p => p.productCode === d.productCode);
@@ -100,26 +95,25 @@ export const sheetService = {
     if (product.isStock) {
         if (product.stock < d.qty) throw new Error(`庫存不足，剩餘：${product.stock}`);
         await sheets.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID, range: `Products!N${pIndex + 2}`, // N 欄
+            spreadsheetId: SPREADSHEET_ID, range: `Products!N${pIndex + 2}`, 
             valueInputOption: 'USER_ENTERED', resource: { values: [[product.stock - d.qty]] }
         });
     }
 
-    // 依照圖片 18/19 結構：A order_ID, B buyer_ID, C buyer_name, D product_code, E product_name, F spec, G qty, H price, I total, J (保留), K order_date, L status
     const row = [
       d.orderId || `ORD${Date.now()}`, d.buyerId, d.buyerName, d.productCode, 
       d.productName, d.spec, d.qty, d.price, d.total, 
-      '', new Date().toLocaleDateString('zh-TW'), d.status || '待點貨'
+      new Date().toLocaleDateString('zh-TW'), d.status || '待點貨'
     ];
     await sheets.spreadsheets.values.append({ 
-      spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:L', 
+      spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K', 
       valueInputOption: 'USER_ENTERED', resource: { values: [row] } 
     });
   },
 
-  // 6. 修改訂單狀態 (修正位移：L 欄為狀態)
+  // 6. 修改訂單 (支援數量與狀態更新)
   async updateOrderWithCheck(orderId, data) {
-    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:L' });
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K' });
     const rows = res.data.values || [];
     const headers = rows[0];
     const orderIndex = rows.findIndex(r => r[0] === String(orderId));
@@ -133,27 +127,37 @@ export const sheetService = {
         throw new Error("⚠️ 團主已結單，無法修改或取消訂單");
     }
 
-    // 現貨歸還庫存
+    if (data.qty) {
+      const price = parseInt(rows[orderIndex][headers.indexOf('price')] || 0);
+      const newTotal = price * parseInt(data.qty);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `Orders!G${orderIndex + 1}:I${orderIndex + 1}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values: [[data.qty, price, newTotal]] }
+      });
+    }
+
     if (data.status === '買家取消' && product && product.isStock) {
       const pIndex = products.findIndex(p => p.productCode === productCode);
-      const qtyColIndex = headers.indexOf('qty');
-      const currentQty = parseInt(rows[orderIndex][qtyColIndex] || 0);
+      const currentQty = parseInt(rows[orderIndex][headers.indexOf('qty')] || 0);
       await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID, range: `Products!N${pIndex + 2}`,
           valueInputOption: 'USER_ENTERED', resource: { values: [[product.stock + currentQty]] }
       });
     }
 
-    // 更新 L 欄 (狀態)
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID, range: `Orders!L${orderIndex + 1}`,
-      valueInputOption: 'USER_ENTERED', resource: { values: [[data.status]] }
-    });
+    if (data.status) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID, range: `Orders!K${orderIndex + 1}`,
+        valueInputOption: 'USER_ENTERED', resource: { values: [[data.status]] }
+      });
+    }
   },
 
-  // 7. 取得訂單 (精準對齊 A:L 欄位)
+  // 7. 取得訂單 (過濾取消訂單)
   async getOrders(userId = null) {
-    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:L' });
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K' });
     const rows = res.data.values || [];
     if (rows.length <= 1) return [];
     const headers = rows[0];
@@ -171,10 +175,14 @@ export const sheetService = {
         price: parseInt(get('price') || 0),
         total: parseInt(get('total') || 0), 
         orderDate: get('order_date'), 
-        status: row[11] || get('status(待點貨/已到貨/斷貨)') // L 欄
+        status: row[10] || '' 
       };
     });
-    return userId ? orders.filter(o => o.buyerId === userId) : orders;
+
+    if (userId) {
+      return orders.filter(o => o.buyerId === userId && o.status !== '買家取消' && o.status !== '已刪除');
+    }
+    return orders;
   }
 };
 
