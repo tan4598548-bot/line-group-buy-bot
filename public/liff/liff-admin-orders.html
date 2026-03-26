@@ -1,56 +1,99 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8"><title>訂單管理</title>
+  <meta charset="UTF-8"><title>訂單查詢中心</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     body { font-family: -apple-system, sans-serif; padding: 15px; background: #f4f4f7; margin:0; }
-    .nav { margin-bottom: 15px; padding: 10px 0; } 
+    .nav { margin-bottom: 15px; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; } 
     .btn-back { color: #007bff; text-decoration: none; font-weight: bold; font-size: 16px; }
-    .order-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 5px solid #007bff; }
-    .status-badge { font-size: 11px; padding: 4px 8px; border-radius: 4px; float: right; background: #e9ecef; color: #495057; font-weight: bold; }
+    .order-card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-left: 5px solid #e44d26; }
+    .status-badge { font-size: 11px; padding: 4px 8px; border-radius: 4px; float: right; background: #fff3f0; color: #e44d26; font-weight: bold; }
     .p-name { font-size: 16px; font-weight: bold; color: #333; display: block; margin-bottom: 5px; }
-    .info-line { font-size: 13px; color: #666; line-height: 1.6; }
-    .price-tag { text-align: right; color: #e44d26; font-weight: bold; font-size: 16px; margin-top: 5px; }
+    .info-line { font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 10px; }
+    .btn-action { background: #e44d26; color: white; border: none; width: 100%; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    .btn-action:active { background: #c33d1b; }
+    .price-tag { text-align: right; color: #333; font-weight: bold; font-size: 15px; }
+    #list { min-height: 200px; }
   </style>
 </head>
 <body>
-  <div class="nav"><a href="liff-admin-dashboard.html" class="btn-back">❮ 返回管理中心</a></div>
-  <h3 style="margin-top:0;">📑 完整訂單清單</h3>
-  <div id="list">🔍 正在同步雲端資料...</div>
+  <div class="nav">
+    <a href="liff-admin-dashboard.html" class="btn-back">❮ 返回中心</a>
+    <span style="font-weight: bold; color: #666;">待處理訂單</span>
+  </div>
+
+  <div id="list">🔍 正在讀取待結單資料...</div>
 
 <script>
 async function init() {
   try {
     await liff.init({ liffId: "2008857998-wtK5loPp" });
     if (!liff.isLoggedIn()) { liff.login(); return; }
-    
+    renderOrders();
+  } catch (err) {
+    document.getElementById("list").innerHTML = "LIFF 初始化失敗";
+  }
+}
+
+async function renderOrders() {
+  try {
     const res = await fetch("/api/admin/orders?t=" + Date.now());
     const data = await res.json();
     const listDiv = document.getElementById("list");
-    
-    if (!data || data.length === 0) {
-      listDiv.innerHTML = "目前尚無訂單";
+
+    // 💡 核心邏輯：只顯示「待點貨」訂單，排除已取消或已結單的
+    const activeOrders = data.filter(o => o.status === '待點貨');
+
+    if (activeOrders.length === 0) {
+      listDiv.innerHTML = '<div style="text-align:center; padding-top:50px; color:#999;">目前沒有待處理訂單</div>';
       return;
     }
 
-    listDiv.innerHTML = data.reverse().map(o => `
+    listDiv.innerHTML = activeOrders.map(o => `
       <div class="order-card">
-        <span class="status-badge">${o.status}</span>
+        <span class="status-badge">未結單</span>
         <span class="p-name">${o.productName}</span>
         <div class="info-line">
           買家: <strong>${o.buyerName}</strong><br>
-          規格: ${o.spec || '預設'} / 尺寸: ${o.color || 'F'}<br>
-          數量: ${o.qty} | 日期: ${o.orderDate || '未註記'}
+          規格: <span style="color:#007bff">${o.spec || '預設'}</span><br>
+          數量: <strong>${o.qty}</strong> | 日期: ${o.orderDate || 'N/A'}<br>
+          結單日: ${o.closeDate || '未設定'}
         </div>
-        <div class="price-tag">$${o.total}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="price-tag">金額: $${o.total}</div>
+          <button class="btn-action" style="width: auto; padding: 6px 20px;" onclick="finalizeOrder('${o.orderId}')">結單</button>
+        </div>
       </div>
     `).join("");
   } catch (err) {
-    document.getElementById("list").innerHTML = "讀取錯誤，請稍後再試";
+    document.getElementById("list").innerHTML = "讀取資料出錯";
   }
 }
+
+async function finalizeOrder(orderId) {
+  if (!confirm("確定要將此訂單「結單」嗎？\n結單後買家將無法修改，並會自動轉入採購清單。")) return;
+
+  try {
+    // 呼叫結單 API
+    const res = await fetch(`/api/admin/orders/${orderId}/finalize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (res.ok) {
+      alert("結單完成！");
+      renderOrders(); // 重新整理清單
+    } else {
+      const err = await res.json();
+      alert("結單失敗: " + (err.error || '未知錯誤'));
+    }
+  } catch (e) {
+    alert("網路連線失敗");
+  }
+}
+
 window.onload = init;
 </script>
 </body>

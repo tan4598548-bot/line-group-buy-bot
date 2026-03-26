@@ -5,54 +5,154 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
-    .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; }
-    .vendor-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 12px; border-top: 4px solid #6f42c1; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    .p-name { font-weight: bold; font-size: 16px; color: #333; }
-    .qty-box { background: #f8f9ff; padding: 12px; border-radius: 8px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; }
-    .total-num { color: #6f42c1; font-size: 20px; font-weight: bold; }
-    .btn-back { border: none; background: none; color: #007bff; font-weight: bold; font-size: 16px; cursor: pointer; }
+    body { font-family: sans-serif; background: #f0f2f5; margin: 0; padding: 10px; }
+    .tabs { display: flex; background: white; border-radius: 8px; margin-bottom: 15px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .tab { flex: 1; padding: 12px; text-align: center; font-size: 14px; font-weight: bold; cursor: pointer; color: #666; }
+    .tab.active { background: #007bff; color: white; }
+    
+    .card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .card-title { font-weight: bold; font-size: 15px; margin-bottom: 5px; }
+    .card-info { font-size: 13px; color: #555; line-height: 1.5; }
+    .btn-group { display: flex; gap: 5px; margin-top: 10px; }
+    button { flex: 1; padding: 8px; border-radius: 5px; border: none; font-weight: bold; cursor: pointer; }
+    .btn-edit { background: #eee; color: #333; }
+    .btn-out { background: #fff0f0; color: #d93025; border: 1px solid #d93025; }
+    .btn-print { background: #28a745; color: white; width: 100%; margin-bottom: 10px; }
+    
+    /* 彈窗樣式 */
+    .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; }
+    .modal-content { background:white; padding:20px; border-radius:12px; width:90%; max-width:400px; }
+    input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <button class="btn-back" onclick="location.href='liff-admin-dashboard.html'">⬅ 返回</button>
-    <h3 style="margin:0;">🏢 廠商採購總計</h3>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('unorder', this)">未訂貨</div>
+    <div class="tab" onclick="switchTab('ordered', this)">已訂貨</div>
+    <div class="tab" onclick="switchTab('outofstock', this)">斷貨區</div>
   </div>
-  <div id="vendor-list">🔍 正在計算廠商採購總數...</div>
+
+  <div id="actionArea"></div>
+  <div id="list">讀取中...</div>
+
+  <div id="editModal" class="modal">
+    <div class="modal-content">
+      <h3>下訂資料修改</h3>
+      <input type="hidden" id="editCode">
+      <input type="hidden" id="editSpec">
+      <label>實際下訂總數</label>
+      <input type="number" id="editQty">
+      <label>成本</label>
+      <input type="number" id="editCost">
+      <label>廠商名稱</label>
+      <input type="text" id="editVendor">
+      <label>匯款日期</label>
+      <input type="date" id="editPayDate">
+      <div class="btn-group">
+        <button class="btn-edit" onclick="closeModal()">取消</button>
+        <button style="background:#007bff; color:white;" onclick="saveVendorOrder()">儲存並移至已訂貨</button>
+      </div>
+    </div>
+  </div>
 
 <script>
+let allData = [];
+let currentTab = 'unorder';
+
 async function init() {
   await liff.init({ liffId: "2008857998-481MeChx" });
-  if (!liff.isLoggedIn()) liff.login();
-  loadVendorSummary();
+  loadData();
 }
 
-async function loadVendorSummary() {
-  try {
-    const res = await fetch("/api/admin/vendor-summary?t=" + Date.now());
-    const data = await res.json();
-    const listDiv = document.getElementById("vendor-list");
-    
-    if (!data || data.length === 0) {
-      listDiv.innerHTML = '<div style="text-align:center; padding:40px; color:#999;">目前沒有待採購的商品資料</div>';
-      return;
-    }
+async function loadData() {
+  const res = await fetch('/api/admin/vendor-orders');
+  allData = await res.json();
+  render();
+}
 
-    listDiv.innerHTML = data.map(item => `
-      <div class="vendor-card">
-        <div class="p-name">${item.productName}</div>
-        <div style="font-size:12px; color:#999;">商品代碼: ${item.productCode}</div>
-        <div class="qty-box">
-          <span style="font-size:14px; color:#555;">應向廠商訂購總數：</span>
-          <span class="total-num">${item.totalOrdered} <small style="font-size:12px;">件</small></span>
-        </div>
-      </div>
-    `).join("");
-  } catch (e) {
-    document.getElementById("vendor-list").innerHTML = "讀取失敗，請確認網路連線";
+function switchTab(tab, el) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+
+function render() {
+  const list = document.getElementById('list');
+  const actionArea = document.getElementById('actionArea');
+  list.innerHTML = '';
+  actionArea.innerHTML = '';
+
+  let filtered = [];
+  if (currentTab === 'unorder') {
+    // 未訂貨：匯款日為空 且 不是斷貨
+    filtered = allData.filter(d => !d.payDate && d.status !== '斷貨');
+    actionArea.innerHTML = `<button class="btn-print" onclick="generatePDF()">🖨️ 印出結單採購單 (PDF)</button>`;
+  } else if (currentTab === 'ordered') {
+    // 已訂貨：已有匯款日 且 狀態不是斷貨
+    filtered = allData.filter(d => d.payDate && d.status !== '斷貨');
+  } else {
+    // 斷貨區
+    filtered = allData.filter(d => d.status === '斷貨');
   }
+
+  if (filtered.length === 0) { list.innerHTML = '<div style="text-align:center;color:#999;padding:20px;">空空如也</div>'; return; }
+
+  list.innerHTML = filtered.map(d => `
+    <div class="card">
+      <div class="card-title">${d.productName}</div>
+      <div class="card-info">
+        規格：<span style="color:#007bff;font-weight:bold;">${d.spec}</span><br>
+        成本：$${d.cost || '--'} | 數量：${d.totalQty}<br>
+        ${d.payDate ? `匯款日：${d.payDate} | 廠商：${d.vendorName || '未註記'}` : `訂貨日：${d.orderDate}`}
+      </div>
+      <div class="btn-group">
+        ${currentTab !== 'outofstock' ? `
+          <button class="btn-edit" onclick="openEditModal('${d.productCode}','${d.spec}',${d.totalQty},'${d.vendorName}','${d.cost}')">修改/下訂</button>
+          <button class="btn-out" onclick="handleOut('${d.productCode}','${d.productName}','${d.spec}')">斷貨</button>
+        ` : `<button class="btn-out" onclick="deleteItem('${d.productCode}','${d.spec}')">刪除記錄</button>`}
+      </div>
+    </div>
+  `).join('');
 }
+
+function openEditModal(code, spec, qty, vendor, cost) {
+  document.getElementById('editCode').value = code;
+  document.getElementById('editSpec').value = spec;
+  document.getElementById('editQty').value = qty;
+  document.getElementById('editVendor').value = vendor === 'undefined' ? '' : vendor;
+  document.getElementById('editCost').value = cost === 'undefined' ? '' : cost;
+  document.getElementById('editModal').style.display = 'flex';
+}
+
+function closeModal() { document.getElementById('editModal').style.display = 'none'; }
+
+async function saveVendorOrder() {
+  const data = {
+    productCode: document.getElementById('editCode').value,
+    spec: document.getElementById('editSpec').value,
+    totalQty: document.getElementById('editQty').value,
+    vendorName: document.getElementById('editVendor').value,
+    cost: document.getElementById('editCost').value,
+    payDate: document.getElementById('editPayDate').value || new Date().toISOString().split('T')[0]
+  };
+
+  const res = await fetch('/api/admin/vendor-orders/update', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  if (res.ok) { closeModal(); loadData(); }
+}
+
+async function handleOut(code, name, spec) {
+  if (!confirm(`確定要將「${name} - ${spec}」標記為斷貨嗎？\n這將會發送通知給所有買家！`)) return;
+  // 呼叫斷貨 API ...
+}
+
+function generatePDF() { alert("產生 PDF 功能開發中..."); }
+
 window.onload = init;
 </script>
 </body>

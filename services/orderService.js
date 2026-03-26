@@ -22,10 +22,9 @@ export const orderService = {
     }
   },
 
-  /** 建立新訂單 (買家下單) - 強化規格驗證 */
+  /** 建立新訂單 (買家下單) */
   async createOrder(data) {
     try {
-      // 驗證：規格必須包含顏色與尺寸，且不能為空
       if (!data.spec || data.spec.includes('undefined') || data.spec === "") {
         throw new Error("規格未選定，訂單不成立");
       }
@@ -50,6 +49,41 @@ export const orderService = {
     }
   },
 
+  /** 核心功能：結單並轉入廠商管理 (VendorOrders) */
+  async finalizeOrder(orderId) {
+    try {
+      // 1. 取得該筆訂單詳細資訊
+      const orders = await sheetService.getOrders();
+      const target = orders.find(o => String(o.orderId) === String(orderId));
+      if (!target) throw new Error("找不到訂單");
+
+      // 2. 更新 Orders 狀態為「已結單」
+      // 注意：此處調用 sheetService.updateOrderWithCheck 以確保一致性
+      await sheetService.updateOrderWithCheck(orderId, { status: "已結單" });
+
+      // 3. 自動彙整至 VendorOrders (採購表)
+      // 我們直接調用 sheetService 內部的 Google Sheets API 邏輯或建立新方法
+      await this.syncToVendorOrders(target);
+      
+      return { success: true };
+    } catch (e) {
+      console.error(`❌ [orderService] 結單失敗:`, e.message);
+      throw e;
+    }
+  },
+
+  /** 私有邏輯：彙整採購數量 */
+  async syncToVendorOrders(order) {
+    // 這裡我們直接操作 sheetService 提供的 sheets 物件或透過 API 呼叫
+    // 為了讓您方便複製，這裡假設實作邏輯在 sheetService 中
+    return await sheetService.syncToVendorOrders({
+      productCode: order.productCode,
+      productName: order.productName,
+      spec: order.spec,
+      qty: order.qty
+    });
+  },
+
   /** 更新訂單 (處理數量修改與拆單) */
   async updateOrder(orderId, updateData) {
     try {
@@ -60,7 +94,7 @@ export const orderService = {
           updateData.total = Number(target.price) * Number(updateData.qty);
         }
       }
-      return await sheetService.updateOrderAndSplit(orderId, updateData);
+      return await sheetService.updateOrderWithCheck(orderId, updateData);
     } catch (e) {
       console.error(`❌ [orderService] 更新訂單 ${orderId} 失敗:`, e.message);
       throw e;
@@ -70,7 +104,7 @@ export const orderService = {
   /** 刪除訂單 (買家端操作) */
   async deleteOrder(orderId) {
     try {
-      return await sheetService.updateOrderAndSplit(orderId, { status: "買家取消" });
+      return await sheetService.updateOrderWithCheck(orderId, { status: "買家取消" });
     } catch (e) {
       console.error(`❌ [orderService] 刪除訂單 ${orderId} 失敗:`, e.message);
       throw e;
