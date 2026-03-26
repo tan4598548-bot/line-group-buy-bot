@@ -10,7 +10,7 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: 'v4', auth });
 
 export const sheetService = {
-  // 1. 取得商品
+  // 1. 取得商品 (包含原有的 active/overstock 篩選邏輯)
   async getProducts(filter = 'all') {
     try {
       const res = await sheets.spreadsheets.values.get({ 
@@ -38,52 +38,42 @@ export const sheetService = {
           description: get('說明')
         };
       });
+
       data = data.filter(p => p.status !== '已刪除');
       if (filter === 'active') return data.filter(p => p.status === '上架' && !p.isStock);
       if (filter === 'overstock') return data.filter(p => p.isStock && p.stock > 0 && p.status === '上架');
       return data;
-    } catch (e) { return []; }
+    } catch (e) { console.error("getProducts Error:", e); return []; }
   },
 
-  // 2. 結單同步至 VendorOrders (廠商採購表)
+  // 2. 結單同步至 VendorOrders (採購表 A:J 欄位)
   async syncToVendorOrders(order) {
     const res = await sheets.spreadsheets.values.get({ 
-      spreadsheetId: SPREADSHEET_ID, range: 'VendorOrders!A:H' 
+      spreadsheetId: SPREADSHEET_ID, range: 'VendorOrders!A:J' 
     });
     const rows = res.data.values || [];
     
-    // 檢查 VendorOrders 是否已有相同商品代碼 + 規格，且狀態為「未到貨」
     const vIndex = rows.findIndex(r => r[0] === order.productCode && r[2] === order.spec && r[7] === '未到貨');
 
     if (vIndex === -1) {
-      // 新增一筆採購需求
       const newRow = [
-        order.productCode, 
-        order.productName, 
-        order.spec, 
-        order.qty, // 採購總數
-        0,         // 實際到貨數
-        new Date().toLocaleDateString('zh-TW'), // 訂貨日期
-        '',        // 匯款日期(留空)
-        '未到貨'    // 到貨狀態
+        order.productCode, order.productName, order.spec, order.qty, 0,
+        new Date().toLocaleDateString('zh-TW'), '', '未到貨', '', ''
       ];
       await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID, range: 'VendorOrders!A:H',
+        spreadsheetId: SPREADSHEET_ID, range: 'VendorOrders!A:J',
         valueInputOption: 'USER_ENTERED', resource: { values: [newRow] }
       });
     } else {
-      // 累加採購總數 (D 欄)
       const currentQty = parseInt(rows[vIndex][3] || 0);
       await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `VendorOrders!D${vIndex + 1}`,
-        valueInputOption: 'USER_ENTERED',
-        resource: { values: [[currentQty + order.qty]] }
+        spreadsheetId: SPREADSHEET_ID, range: `VendorOrders!D${vIndex + 1}`,
+        valueInputOption: 'USER_ENTERED', resource: { values: [[currentQty + order.qty]] }
       });
     }
   },
 
-  // 3. 取得買家
+  // 3. 取得買家清單 (用於推播)
   async getBuyersByProduct(productCode) {
     const orders = await this.getOrders();
     return orders
@@ -103,7 +93,7 @@ export const sheetService = {
     });
   },
 
-  // 5. 新增訂單
+  // 5. 新增訂單 (包含原有的庫存扣除邏輯)
   async appendOrder(d) {
     const products = await this.getProducts('all');
     const product = products.find(p => p.productCode === d.productCode);
@@ -112,6 +102,7 @@ export const sheetService = {
     if (product.isStock) {
         if (product.stock < d.qty) throw new Error(`庫存不足`);
         const pIndex = products.findIndex(p => p.productCode === d.productCode);
+        // 更新 Products 表 N 欄 (庫存)
         await sheets.spreadsheets.values.update({
             spreadsheetId: SPREADSHEET_ID, range: `Products!N${pIndex + 2}`, 
             valueInputOption: 'USER_ENTERED', resource: { values: [[product.stock - d.qty]] }
@@ -129,7 +120,7 @@ export const sheetService = {
     });
   },
 
-  // 6. 修改訂單 (含結單鎖定檢查)
+  // 6. 修改訂單 (含結單鎖定檢查與金額重新計算)
   async updateOrderWithCheck(orderId, data) {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K' });
     const rows = res.data.values || [];
@@ -137,9 +128,9 @@ export const sheetService = {
     const orderIndex = rows.findIndex(r => r[0] === String(orderId));
     if (orderIndex === -1) throw new Error("找不到訂單");
 
-    // 若訂單狀態已經是「已結單」，禁止修改 (除非是將狀態改為已結單的動作本身)
-    if (rows[orderIndex][headers.indexOf('status')] === '已結單' && data.status !== '已結單') {
-      throw new Error("⚠️ 訂單已結單，無法修改");
+    const currentStatus = rows[orderIndex][headers.indexOf('status') || 10];
+    if (currentStatus === '已結單' && data.status !== '已結單' && data.status !== '已到貨') {
+      throw new Error("⚠️ 訂單已結單鎖定，僅能變更為已到貨");
     }
 
     const rowNum = orderIndex + 1;
@@ -159,7 +150,7 @@ export const sheetService = {
     }
   },
 
-  // 7. 取得訂單
+  // 7. 取得訂單 (買家/團主通用)
   async getOrders(userId = null) {
     const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Orders!A:K' });
     const rows = res.data.values || [];
@@ -168,14 +159,17 @@ export const sheetService = {
     const orders = rows.slice(1).map(row => {
       const get = (n) => row[headers.indexOf(n)] || '';
       return { 
-        orderId: get('order_ID'), buyerId: get('buyer_ID'), buyerName: get('buyer_name'),
-        productCode: get('product_code'), productName: get('product_name'),
-        spec: get('spec'), qty: parseInt(get('qty') || 0), price: parseInt(get('price') || 0),
-        total: parseInt(get('total') || 0), orderDate: get('order_date'), status: row[10] || '' 
+        orderId: row[0], buyerId: row[1], buyerName: row[2],
+        productCode: row[3], productName: row[4],
+        spec: row[5], qty: parseInt(row[6] || 0), price: parseInt(row[7] || 0),
+        total: parseInt(row[8] || 0), orderDate: row[9], status: row[10] || '' 
       };
     });
     return userId ? orders.filter(o => o.buyerId === userId && o.status !== '買家取消') : orders;
-  }
-};
+  },
 
-export default sheetService;
+  // 8. 取得採購表內容 (VendorOrders)
+  async getVendorOrders() {
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'VendorOrders!A:J' });
+    const rows = res.data.values || [];
+    if (rows.length

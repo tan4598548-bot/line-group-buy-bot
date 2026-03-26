@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import productRoutes from "./routes/productRoutes.js";
 import { sheetService } from "./services/sheetService.js";
 import { client } from "./services/lineClient.js";
+import pdfService from "./services/pdfService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,9 +25,8 @@ app.get('/liff/:filename', (req, res) => {
     });
 });
 
-// --- [A] 訂單相關 API ---
+// --- [A] 買家與管理端訂單 API ---
 
-// 1. 取得訂單
 app.get("/api/admin/orders", async (req, res) => {
     try {
         const { userId } = req.query; 
@@ -35,7 +35,7 @@ app.get("/api/admin/orders", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 2. 確認結單：更改 Orders 狀態並彙整至 VendorOrders
+// 核心：確認結單（同步至 VendorOrders）
 app.post("/api/admin/orders/:orderId/finalize", async (req, res) => {
     try {
         const { orderId } = req.params;
@@ -43,24 +43,19 @@ app.post("/api/admin/orders/:orderId/finalize", async (req, res) => {
         const target = orders.find(o => String(o.orderId) === String(orderId));
         if (!target) return res.status(404).json({ error: "找不到訂單" });
 
-        // A. 更新買家訂單狀態
         await sheetService.updateOrderWithCheck(orderId, { status: '已結單' });
-
-        // B. 自動彙整至廠商採購表
         await sheetService.syncToVendorOrders({
             productCode: target.productCode,
             productName: target.productName,
             spec: target.spec,
             qty: target.qty
         });
-
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- [B] 廠商管理 API (VendorOrders) ---
+// --- [B] 廠商採購管理 API ---
 
-// 1. 取得廠商採購清單
 app.get("/api/admin/vendor-orders", async (req, res) => {
     try {
         const data = await sheetService.getVendorOrders();
@@ -68,7 +63,6 @@ app.get("/api/admin/vendor-orders", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 2. 更新採購資料 (下訂、匯款、成本、廠商名稱)
 app.put("/api/admin/vendor-orders/update", async (req, res) => {
     try {
         await sheetService.updateVendorOrder(req.body);
@@ -76,31 +70,41 @@ app.put("/api/admin/vendor-orders/update", async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// 3. 廠商端斷貨處理
-app.post("/api/admin/vendor-orders/out-of-stock", async (req, res) => {
-    const { productCode, productName, spec } = req.body;
+// 到貨點貨
+app.put("/api/admin/vendor-orders/arrival", async (req, res) => {
     try {
-        // 更新廠商表狀態
-        await sheetService.updateVendorStatus(productCode, spec, '斷貨');
-        
-        // 取得所有訂購此規格的買家
-        const orders = await sheetService.getOrders();
-        const affectedBuyers = orders.filter(o => o.productCode === productCode && o.spec === spec && o.status !== '買家取消');
+        const { productCode, spec, arrivedQty } = req.body;
+        await sheetService.updateArrivalStatus(productCode, spec, arrivedQty);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
-        // 群發通知
-        await Promise.all(affectedBuyers.map(async (b) => {
-            if (b.buyerId) {
-                try {
-                    await client.pushMessage(b.buyerId, {
-                        type: 'text',
-                        text: `【斷貨通知】\n您訂購的「${productName} (${spec})」因廠商供貨中斷，系統已自動取消該筆訂購，深感抱歉。`
-                    });
-                } catch (err) { console.error("通知失敗:", b.buyerId); }
-            }
-        }));
+// --- [C] 發貨與 PDF API ---
+
+app.get("/api/admin/shipping/export-pdf", async (req, res) => {
+    try {
+        const { productCode, spec } = req.query;
+        const allOrders = await sheetService.getOrders();
+        const shippingList = allOrders.filter(o => 
+            o.productCode === productCode && o.spec === spec && 
+            (o.status === '已結單' || o.status === '待點貨')
+        );
+
+        if (shippingList.length === 0) return res.status(404).json({ error: "無可發貨訂單" });
+        const pdfUrl = await pdfService.generateShippingPdf(shippingList);
+        res.json({ url: pdfUrl }); 
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/admin/shipping/mark-done", async (req, res) => {
+    try {
+        const { productCode, spec } = req.body;
+        const allOrders = await sheetService.getOrders();
+        const targets = allOrders.filter(o => o.productCode === productCode && o.spec === spec);
+        await Promise.all(targets.map(o => sheetService.updateOrderWithCheck(o.orderId, { status: '已到貨' })));
         res.json({ ok: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 管理系統運行中，端口: ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 全功能系統運行中，端口: ${PORT}`));
